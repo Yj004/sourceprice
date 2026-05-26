@@ -4,7 +4,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 16px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -15,6 +15,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .filters__title {
@@ -22,6 +23,21 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.filters__title-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.filters__head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .filters__clear {
@@ -31,20 +47,50 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 4px 8px;
   border-radius: 6px;
 }
 .filters__clear:hover:not(:disabled) { background: var(--surface-2); }
 .filters__clear:disabled { color: var(--muted); cursor: default; opacity: 0.6; }
 
+.filters__toggle {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.filters__toggle:hover { background: var(--surface-2); color: var(--text); }
+
+.filters__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .filters__group { display: flex; flex-direction: column; gap: 6px; }
 
 .filters__label {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+}
+
+.filters__input-wrap {
+  position: relative;
+}
+
+.filters__input-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
 }
 
 .filters__input {
@@ -58,6 +104,7 @@
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
+.filters__input--with-icon { padding-left: 32px; }
 
 .filters__input::placeholder { color: #9ca3af; }
 
@@ -67,7 +114,6 @@
 }
 
 .filters__count {
-  margin-top: 4px;
   padding-top: 12px;
   border-top: 1px dashed var(--border);
   font-size: 12px;
@@ -75,6 +121,12 @@
 }
 .filters__count strong { color: var(--text); font-weight: 600; }
 
+/* Mobile: collapsible header */
 @media (max-width: 1100px) {
   .filters { position: static; }
+}
+
+@media (max-width: 900px) {
+  .filters__toggle { display: inline-flex; }
+  .filters--collapsed .filters__body { display: none; }
 }

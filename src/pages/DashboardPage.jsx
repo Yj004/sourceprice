@@ -94,7 +94,7 @@ const DashboardPage = () => {
       <Navbar />
       <main className="dash">
         <header className="dash__head">
-          <div>
+          <div className="dash__heading">
             <h1 className="dash__title">Price Management</h1>
             <p className="dash__subtitle">
               Click <strong>Edit</strong> on any row, type the new price, press
@@ -108,6 +108,12 @@ const DashboardPage = () => {
             disabled={loading}
             title="Reload data"
           >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16" />
+              <path d="M3 21v-5h5" />
+            </svg>
             {loading ? 'Loading…' : 'Refresh'}
           </button>
         </header>

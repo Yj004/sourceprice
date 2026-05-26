@@ -26,7 +26,9 @@
   letter-spacing: 0.05em;
   color: var(--muted);
   padding: 12px 16px;
-  background: var(--surface-2);
+  background: rgba(243, 244, 246, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -37,30 +39,59 @@
   color: var(--text);
   vertical-align: middle;
   background: var(--surface);
+  transition: background 0.15s ease;
 }
 
 .ptable tbody tr:last-child td { border-bottom: none; }
-.ptable tbody tr:hover td { background: #fafbff; }
+.ptable tbody tr:hover td { background: #faf9ff; }
 
-.ptable__asin { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 500; }
-.ptable__model { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+.ptable__asin {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.ptable__model {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--muted);
+}
 .ptable__num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
-.ptable__updates { color: var(--muted); font-weight: 600; }
 
 .ptable__chip {
   display: inline-block;
-  padding: 3px 8px;
+  padding: 3px 9px;
   font-size: 11px;
-  font-weight: 500;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.15);
   border-radius: 999px;
-  color: var(--muted);
+  color: #4338ca;
   letter-spacing: 0.02em;
 }
 
+.ptable__updates {
+  color: var(--muted);
+}
+.ptable__updates::before {
+  content: attr(data-pill, '');
+}
+.ptable tbody td.ptable__updates {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Updates pill */
+.ptable tbody .ptable__updates {
+  display: table-cell;
+}
+.ptable tbody .ptable__updates::after {
+  /* deliberately empty - count is rendered directly */
+  content: none;
+}
+
 .ptable__edit {
-  width: 110px;
+  width: 120px;
   padding: 7px 10px;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
@@ -85,10 +116,11 @@
 .ptable__edit-btn {
   padding: 7px 14px;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   border-radius: 8px;
   cursor: pointer;
-  transition: filter 0.15s, background 0.15s, border-color 0.15s, transform 0.05s;
+  transition: filter 0.15s, background 0.15s, border-color 0.15s, transform 0.05s, box-shadow 0.15s;
+  white-space: nowrap;
 }
 
 .ptable__edit-btn {
@@ -96,19 +128,27 @@
   color: var(--text);
   border: 1px solid var(--border);
 }
-.ptable__edit-btn:hover { background: var(--surface-2); border-color: #c9cdd6; }
+.ptable__edit-btn:hover {
+  background: var(--surface-2);
+  border-color: #c9cdd6;
+}
 
 .ptable__save {
-  background: var(--accent);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: #fff;
   border: 1px solid transparent;
+  box-shadow: 0 6px 14px -6px rgba(99, 102, 241, 0.55);
 }
-.ptable__save:hover:not(:disabled) { filter: brightness(1.05); }
+.ptable__save:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 10px 18px -6px rgba(99, 102, 241, 0.55);
+}
 .ptable__save:active:not(:disabled) { transform: translateY(1px); }
 .ptable__save:disabled {
   background: var(--surface-2);
   color: var(--muted);
   border-color: var(--border);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -117,17 +157,22 @@
   color: var(--muted);
   border: 1px solid var(--border);
 }
-.ptable__cancel:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.ptable__cancel:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
 .ptable__cancel:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.ptable__row--flash td { animation: row-flash 1.2s ease-out; }
+.ptable__row--flash td {
+  animation: row-flash 1.2s ease-out;
+}
 @keyframes row-flash {
-  0%   { background: rgba(99, 102, 241, 0.20); }
+  0%   { background: rgba(139, 92, 246, 0.22); }
   100% { background: var(--surface); }
 }
 
 .ptable__state {
-  padding: 40px 16px;
+  padding: 48px 16px;
   text-align: center;
   font-size: 14px;
   color: var(--muted);
@@ -140,7 +185,11 @@
   align-items: center;
 }
 .ptable__state--empty { font-style: italic; }
-.ptable__state--error { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+.ptable__state--error {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
 .ptable__state--error strong { color: #991b1b; font-weight: 600; }
 .ptable__state--error span { color: #b91c1c; font-style: italic; }
 
@@ -159,17 +208,24 @@
   100% { background-position: -200% 0; }
 }
 
+/* Mobile: card-row layout */
 @media (max-width: 720px) {
-  .ptable__wrap { max-height: none; overflow: visible; }
+  .ptable__wrap {
+    max-height: none;
+    overflow: visible;
+  }
   .ptable, .ptable thead, .ptable tbody, .ptable tr, .ptable td, .ptable th {
-    display: block; width: 100%;
+    display: block;
+    width: 100%;
   }
   .ptable thead { display: none; }
   .ptable tbody tr {
     padding: 14px;
     border-bottom: 1px solid var(--border);
+    background: var(--surface);
   }
   .ptable tbody tr:last-child { border-bottom: none; }
+  .ptable tbody tr:hover td { background: var(--surface); }
   .ptable tbody td {
     padding: 6px 0;
     border: none;
@@ -177,6 +233,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    background: transparent;
   }
   .ptable tbody td::before {
     content: attr(data-label);
@@ -184,8 +241,17 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    font-weight: 500;
+    font-weight: 600;
   }
   .ptable__num { text-align: right; }
-  .ptable__actions { justify-content: flex-end; }
+  .ptable__actions { justify-content: flex-end; padding-top: 8px !important; }
+  .ptable__edit { width: 140px; }
+  .ptable__row--flash td { animation: none; }
+  .ptable__row--flash {
+    animation: card-flash 1.2s ease-out;
+  }
+  @keyframes card-flash {
+    0%   { background: rgba(139, 92, 246, 0.22); }
+    100% { background: var(--surface); }
+  }
 }

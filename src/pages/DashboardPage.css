@@ -1,7 +1,7 @@
 .dash {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 20px 20px 40px;
+  padding: 24px 20px 48px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -14,12 +14,17 @@
   gap: 12px;
 }
 
+.dash__heading { min-width: 0; }
+
 .dash__title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--text);
+  background: linear-gradient(135deg, #0f172a 0%, #6366f1 60%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .dash__subtitle {
@@ -34,30 +39,37 @@
   padding: 1px 6px;
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: var(--surface-2);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-bottom-width: 2px;
   border-radius: 5px;
   color: var(--text);
   line-height: 1.4;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.05);
 }
 
 .dash__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 500;
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, transform 0.05s, box-shadow 0.15s;
   white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .dash__refresh:hover:not(:disabled) {
   background: var(--surface-2);
   border-color: #c9cdd6;
+  box-shadow: 0 4px 12px -6px rgba(15, 23, 42, 0.15);
 }
+.dash__refresh:active:not(:disabled) { transform: translateY(1px); }
 .dash__refresh:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .dash__layout {
@@ -79,8 +91,9 @@
   .dash__layout > :last-child { grid-column: auto; }
 }
 
-@media (max-width: 480px) {
-  .dash { padding: 14px 14px 32px; }
-  .dash__title { font-size: 20px; }
-  .dash__head { flex-direction: column; align-items: stretch; }
+@media (max-width: 560px) {
+  .dash { padding: 16px 14px 32px; gap: 14px; }
+  .dash__title { font-size: 22px; }
+  .dash__head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .dash__refresh { align-self: flex-start; }
 }

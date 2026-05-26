@@ -1,27 +1,31 @@
 /**
- * Allowed Users (Whitelist)
+ * Allowed Users (Whitelist + Passwords)
  * ----------------------------------------------------------------
- * Only the email addresses listed here can log in. Any valid email
- * domain is supported (Gmail, company, etc.) — domain restriction
- * belongs in this list, not in the auth service.
+ * The single source of truth for who can sign in. Each entry pairs
+ * an email with a password. The auth service checks BOTH fields.
  *
- * Important: keep every entry lowercase. The auth service
- * lowercases the user's input before comparing.
+ * IMPORTANT (security):
+ *   - Storing plain-text passwords on the client is fine ONLY for
+ *     this dummy/learning project. In production this list MUST
+ *     move server-side, and passwords must be hashed (bcrypt/argon2).
+ *   - When you migrate to Google OAuth, you can delete the
+ *     `password` field entirely — Google verifies identity for you,
+ *     and this file becomes a pure whitelist again.
  *
- * FUTURE GOOGLE OAUTH FLOW:
- *   - After a user signs in with "Sign in with Google", verify the
- *     email returned by Google Identity Services against this array.
- *   - The check stays exactly the same — only the input source changes.
+ * To add a user:
+ *   1. Append a new { email, password } object below.
+ *   2. Keep `email` lowercase.
+ *   3. Password is case-sensitive; spaces are allowed.
  *
  * FUTURE GOOGLE SHEETS INTEGRATION:
  *   - Replace this static array with a `fetchAllowedUsers()` call
- *     in a sheets service that reads a "Users" tab from a Google
- *     Sheet. Keep the shape identical (lowercase strings).
+ *     that reads a "Users" tab (columns: email, password) from
+ *     a Google Sheet. The consumers don't need to change.
  */
 
 const allowedUsers = [
-  'admin@gmail.com',
-  'devendra.singh@avaipl.com',
+  { email: 'admin@gmail.com',              password: 'admin123' },
+  { email: 'devendra.singh@avaipl.com',    password: 'devendra123' },
 ];
 
 export default allowedUsers;

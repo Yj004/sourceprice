@@ -59,9 +59,9 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState('');
   const initializing = false;
 
-  const login = useCallback((email) => {
+  const login = useCallback((email, password) => {
     setError('');
-    const result = loginWithEmail(email);
+    const result = loginWithEmail(email, password);
 
     if (!result.ok) {
       setError(result.error);
