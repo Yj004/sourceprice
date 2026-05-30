@@ -1,6 +1,6 @@
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -81,6 +81,47 @@
 .stat--violet  { --stat-color: #8b5cf6; --stat-soft: rgba(139, 92, 246, 0.10); }
 .stat--pink    { --stat-color: #ec4899; --stat-soft: rgba(236, 72, 153, 0.10); }
 .stat--emerald { --stat-color: #10b981; --stat-soft: rgba(16, 185, 129, 0.10); }
+.stat--amber   { --stat-color: #f59e0b; --stat-soft: rgba(245, 158, 11, 0.12); }
+
+/* Clickable variant — render as a button with subtle hover lift,
+   visible focus ring, and a chevron to advertise the action. */
+button.stat {
+  appearance: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+}
+
+.stat--clickable {
+  padding-right: 36px;
+}
+
+.stat--clickable:hover {
+  border-color: var(--stat-color);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--stat-soft) 220%);
+}
+
+.stat--clickable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--stat-soft), 0 8px 22px -10px rgba(15, 23, 42, 0.18);
+}
+
+.stat__chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--stat-color);
+  opacity: 0.55;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.stat--clickable:hover .stat__chevron {
+  opacity: 1;
+  transform: translateY(-50%) translateX(2px);
+}
 
 .stat__skel {
   display: inline-block;
@@ -96,11 +137,25 @@
   100% { background-position: -200% 0; }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
+  .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 480px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
   .stat__value { font-size: 20px; }
-  .stat { padding: 12px 14px 12px 16px; }
-  .stat__icon { width: 32px; height: 32px; }
+  .stat {
+    padding: 10px 10px 10px 14px;
+    gap: 8px;
+  }
+  .stat__icon { width: 30px; height: 30px; border-radius: 8px; }
+  .stat__label { font-size: 10px; letter-spacing: 0.04em; }
+  .stat__hint { font-size: 10px; }
+  .stat--clickable { padding-right: 28px; }
+  .stat__chevron { right: 10px; width: 12px; height: 12px; }
 }

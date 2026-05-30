@@ -21,8 +21,11 @@ import { AuthProvider } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { ProductProvider } from './context/ProductContext.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import SuperAdminRoute from './components/SuperAdminRoute.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import ProductHistoryPage from './pages/ProductHistoryPage.jsx';
+import UserManagementPage from './pages/UserManagementPage.jsx';
 import './App.css';
 
 const App = () => (
@@ -36,6 +39,11 @@ const App = () => (
 
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/product/:asin" element={<ProductHistoryPage />} />
+            </Route>
+
+            <Route element={<SuperAdminRoute />}>
+              <Route path="/admin/users" element={<UserManagementPage />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

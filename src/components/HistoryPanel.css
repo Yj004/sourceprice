@@ -93,11 +93,15 @@
   gap: 6px;
 }
 
-.history__asin {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+.history__product {
+  flex: 1;
+  min-width: 0;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .history__badge {
@@ -109,6 +113,22 @@
   padding: 1px 6px;
   color: #4338ca;
   font-variant-numeric: tabular-nums;
+}
+
+.history__field {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .history__delta {
@@ -131,6 +151,7 @@
 .history__delta--up   .history__delta-arrow { background: rgba(16, 185, 129, 0.15); }
 .history__delta--down { color: #b91c1c; }
 .history__delta--down .history__delta-arrow { background: rgba(239, 68, 68, 0.15); }
+.history__delta--neutral { color: var(--text); }
 
 .history__meta {
   display: flex;
@@ -148,6 +169,22 @@
 }
 
 .history__time { font-variant-numeric: tabular-nums; }
+
+.history__snapshot-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.history__snapshot-sep {
+  color: var(--border);
+  font-weight: 400;
+}
 
 .history__empty {
   font-size: 13px;

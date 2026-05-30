@@ -8,7 +8,7 @@
  *   - Logout button.
  */
 
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
 import Button from './Button.jsx';
 import './Navbar.css';
@@ -16,7 +16,7 @@ import './Navbar.css';
 const initialOf = (email) => String(email || '?').trim().charAt(0).toUpperCase();
 
 const Navbar = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -47,6 +47,11 @@ const Navbar = () => {
         </div>
 
         <div className="navbar__right">
+          {isSuperAdmin && (
+            <Link to="/admin/users" className="navbar__admin-link">
+              Users
+            </Link>
+          )}
           {user && (
             <div className="navbar__user" title={user.email}>
               <span className="navbar__avatar" aria-hidden="true">

@@ -38,12 +38,12 @@ const LoginPage = () => {
     }
   }, [initializing, isAuthenticated, navigate, redirectTo]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitting) return;
     setError('');
     setSubmitting(true);
-    const result = login(email, password);
+    const result = await login(email, password);
     setSubmitting(false);
     if (result.ok) navigate(redirectTo, { replace: true });
     else setError(result.error);

@@ -20,12 +20,12 @@ import { useAuth } from '../context/useAuth.js';
 import Loader from './Loader.jsx';
 
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, initializing } = useAuth();
+  const { user, isAuthenticated, initializing } = useAuth();
   const location = useLocation();
 
   if (initializing) return <Loader label="Restoring session…" />;
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user?.token) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 

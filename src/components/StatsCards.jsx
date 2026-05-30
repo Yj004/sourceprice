@@ -1,9 +1,13 @@
 /**
  * StatsCards
  * ----------------------------------------------------------------
- * 4 KPI cards. Each has its own tonal accent (icon background +
+ * 5 KPI cards. Each has its own tonal accent (icon background +
  * left edge stripe) so the row scans quickly. Skeletons cover the
  * initial async load from the services layer.
+ *
+ * A card becomes interactive when `onClick` is provided — rendered as
+ * a <button> with a focus ring and a small chevron affordance so the
+ * user understands they can drill in.
  */
 
 import './StatsCards.css';
@@ -36,27 +40,75 @@ const ICONS = {
       <path d="M12 6v6l4 2" />
     </svg>
   ),
+  user: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
 };
 
-const StatCard = ({ label, value, hint, tone, icon, loading }) => (
-  <div className={`stat stat--${tone}`}>
-    <div className="stat__icon" aria-hidden="true">{icon}</div>
-    <div className="stat__body">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value">
-        {loading ? <span className="stat__skel" /> : value}
-      </div>
-      {hint && <div className="stat__hint">{hint}</div>}
-    </div>
-  </div>
+const ChevronRight = () => (
+  <svg
+    className="stat__chevron"
+    viewBox="0 0 24 24"
+    width="14"
+    height="14"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <path d="M9 18l6-6-6-6" />
+  </svg>
 );
 
-const StatsCards = ({ stats, loading = false }) => (
+const StatCard = ({ label, value, hint, tone, icon, loading, onClick }) => {
+  const clickable = typeof onClick === 'function';
+  const Tag = clickable ? 'button' : 'div';
+  const tagProps = clickable
+    ? {
+        type: 'button',
+        onClick,
+        'aria-label': `${label}: ${value}. Open details.`,
+      }
+    : {};
+
+  return (
+    <Tag
+      className={`stat stat--${tone} ${clickable ? 'stat--clickable' : ''}`}
+      {...tagProps}
+    >
+      <div className="stat__icon" aria-hidden="true">{icon}</div>
+      <div className="stat__body">
+        <div className="stat__label">{label}</div>
+        <div className="stat__value">
+          {loading ? <span className="stat__skel" /> : value}
+        </div>
+        {hint && <div className="stat__hint">{hint}</div>}
+      </div>
+      {clickable && <ChevronRight />}
+    </Tag>
+  );
+};
+
+const StatsCards = ({ stats, loading = false, onOpenMyUpdates }) => (
   <div className="stats">
-    <StatCard tone="indigo"  icon={ICONS.products} label="Total Products"         value={stats.totalProducts}        loading={loading} />
-    <StatCard tone="violet"  icon={ICONS.updates}  label="Total Updates"          value={stats.totalUpdates}         hint="All-time" loading={loading} />
-    <StatCard tone="pink"    icon={ICONS.today}    label="Updated Today"          value={stats.productsUpdatedToday} hint="Unique ASINs" loading={loading} />
-    <StatCard tone="emerald" icon={ICONS.activity} label="Recent Activity"        value={stats.recentActivity}       hint="Last 24h" loading={loading} />
+    <StatCard tone="indigo"  icon={ICONS.products} label="Total Products"  value={stats.totalProducts}        loading={loading} />
+    <StatCard tone="violet"  icon={ICONS.updates}  label="Total Updates"   value={stats.totalUpdates}         hint="All-time" loading={loading} />
+    <StatCard tone="pink"    icon={ICONS.today}    label="Updated Today"   value={stats.productsUpdatedToday} hint="Unique ASINs" loading={loading} />
+    <StatCard tone="emerald" icon={ICONS.activity} label="Recent Activity" value={stats.recentActivity}       hint="Last 24h" loading={loading} />
+    <StatCard
+      tone="amber"
+      icon={ICONS.user}
+      label="My Updates Today"
+      value={stats.myUpdatesToday}
+      hint="Click to view details"
+      loading={loading}
+      onClick={onOpenMyUpdates}
+    />
   </div>
 );
 

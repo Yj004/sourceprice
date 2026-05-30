@@ -1,28 +1,120 @@
 /**
- * ProductTable — Phase 4
- * ----------------------------------------------------------------
- * Presentational table. Supports the full loading/empty/error
- * state matrix so the same component works once a real API is wired.
+ * ProductTable — virtualized for large catalogs (~2k+ rows).
+ *
+ * The row layout is described in ProductRow.jsx. This component is
+ * presentation only: it does not own the edit-modal state — it just
+ * surfaces an onEdit(product) callback up to the dashboard so the
+ * modal can be hoisted there.
  */
 
+import { useEffect, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import ProductRow from './ProductRow.jsx';
 import './ProductTable.css';
 
+const ROW_HEIGHT = 49;
+const MOBILE_PAGE_SIZE = 30;
+const COL_COUNT = 9;
+
+const HEADERS = [
+  { label: 'Brand' },
+  { label: 'Model No' },
+  { label: 'Master Category' },
+  { label: 'Pack size', numeric: true },
+  { label: 'PLC' },
+  { label: 'Total Cost', numeric: true },
+  { label: 'CATAGORY TEAM COST', numeric: true },
+  { label: '', historyCol: true },
+  { label: '', actionCol: true },
+];
+
 const SkeletonRow = () => (
   <tr className="ptable__skeleton-row">
-    {Array.from({ length: 7 }).map((_, i) => (
+    {Array.from({ length: COL_COUNT }).map((_, i) => (
       <td key={i}><span className="ptable__skel" /></td>
     ))}
   </tr>
 );
 
+const useNarrowLayout = () => {
+  const [narrow, setNarrow] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(max-width: 720px)').matches,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)');
+    const onChange = () => setNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  return narrow;
+};
+
+const TableHead = () => (
+  <thead>
+    <tr>
+      {HEADERS.map((h, i) => (
+        <th
+          key={i}
+          className={[
+            h.numeric ? 'ptable__num' : '',
+            h.historyCol ? 'ptable__history-th' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          aria-label={!h.label ? (h.actionCol ? 'Action' : 'History') : undefined}
+        >
+          {h.label}
+        </th>
+      ))}
+    </tr>
+  </thead>
+);
+
 const ProductTable = ({
   products,
-  onSave,
+  onEdit,
   loading = false,
   error = null,
   savingId = null,
 }) => {
+  const scrollRef = useRef(null);
+  const narrow = useNarrowLayout();
+  const [mobilePage, setMobilePage] = useState(1);
+
+  useEffect(() => {
+    setMobilePage(1);
+  }, [products]);
+
+  const rowVirtualizer = useVirtualizer({
+    count: products.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+    enabled: !narrow && products.length > 0,
+  });
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom =
+    virtualRows.length > 0
+      ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
+      : 0;
+
+  const mobilePageCount = Math.max(
+    1,
+    Math.ceil(products.length / MOBILE_PAGE_SIZE),
+  );
+  const mobileProducts = narrow
+    ? products.slice(
+        (mobilePage - 1) * MOBILE_PAGE_SIZE,
+        mobilePage * MOBILE_PAGE_SIZE,
+      )
+    : products;
+
   if (error) {
     return (
       <div className="ptable__state ptable__state--error">
@@ -36,17 +128,7 @@ const ProductTable = ({
     return (
       <div className="ptable__wrap">
         <table className="ptable">
-          <thead>
-            <tr>
-              <th>ASIN</th>
-              <th>Brand</th>
-              <th>Model No</th>
-              <th>Master Category</th>
-              <th className="ptable__num">Current Price</th>
-              <th className="ptable__num">Updates</th>
-              <th aria-label="Action"></th>
-            </tr>
-          </thead>
+          <TableHead />
           <tbody>
             {Array.from({ length: 6 }).map((_, i) => (
               <SkeletonRow key={i} />
@@ -65,31 +147,76 @@ const ProductTable = ({
     );
   }
 
+  const renderRow = (p) => (
+    <ProductRow
+      key={p.id}
+      product={p}
+      onEdit={onEdit}
+      isSaving={savingId === p.id}
+    />
+  );
+
   return (
-    <div className="ptable__wrap">
-      <table className="ptable">
-        <thead>
-          <tr>
-            <th>ASIN</th>
-            <th>Brand</th>
-            <th>Model No</th>
-            <th>Master Category</th>
-            <th className="ptable__num">Current Price</th>
-            <th className="ptable__num">Updates</th>
-            <th aria-label="Action"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map((p) => (
-            <ProductRow
-              key={p.id}
-              product={p}
-              onSave={onSave}
-              isSaving={savingId === p.id}
-            />
-          ))}
-        </tbody>
-      </table>
+    <div className="ptable__shell">
+      <div ref={scrollRef} className="ptable__wrap">
+        <table className="ptable">
+          <TableHead />
+          <tbody>
+            {narrow ? (
+              mobileProducts.map(renderRow)
+            ) : (
+              <>
+                {paddingTop > 0 && (
+                  <tr aria-hidden className="ptable__spacer">
+                    <td colSpan={COL_COUNT} style={{ height: paddingTop }} />
+                  </tr>
+                )}
+                {virtualRows.map((vr) => renderRow(products[vr.index]))}
+                {paddingBottom > 0 && (
+                  <tr aria-hidden className="ptable__spacer">
+                    <td colSpan={COL_COUNT} style={{ height: paddingBottom }} />
+                  </tr>
+                )}
+              </>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <footer className="ptable__foot">
+        {narrow ? (
+          <div className="ptable__pager">
+            <button
+              type="button"
+              className="ptable__page-btn"
+              disabled={mobilePage <= 1}
+              onClick={() => setMobilePage((p) => p - 1)}
+            >
+              Previous
+            </button>
+            <span className="ptable__page-info">
+              Page {mobilePage} of {mobilePageCount}
+              <span className="ptable__page-muted">
+                {' '}
+                · {products.length} rows
+              </span>
+            </span>
+            <button
+              type="button"
+              className="ptable__page-btn"
+              disabled={mobilePage >= mobilePageCount}
+              onClick={() => setMobilePage((p) => p + 1)}
+            >
+              Next
+            </button>
+          </div>
+        ) : (
+          <span className="ptable__page-info">
+            Showing {products.length.toLocaleString('en-IN')} products · scroll
+            to browse
+          </span>
+        )}
+      </footer>
     </div>
   );
 };

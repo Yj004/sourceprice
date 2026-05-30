@@ -1,0 +1,323 @@
+.tumodal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 60px 16px 16px;
+  overflow-y: auto;
+  animation: tumodal-fade-in 0.15s ease-out;
+}
+
+@keyframes tumodal-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.tumodal {
+  width: 100%;
+  max-width: 720px;
+  background: var(--surface);
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  box-shadow: 0 30px 60px -20px rgba(15, 23, 42, 0.45);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+  animation: tumodal-pop-in 0.18s ease-out;
+}
+
+@keyframes tumodal-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tumodal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(236, 72, 153, 0.04) 100%),
+    var(--surface);
+}
+
+.tumodal__head-text { min-width: 0; }
+
+.tumodal__eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+
+.tumodal__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
+
+.tumodal__sub {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tumodal__stat strong {
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tumodal__stat-sep { color: var(--border); }
+
+.tumodal__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tumodal__close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.tumodal__body {
+  padding: 18px 22px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.tumodal__empty {
+  text-align: center;
+  padding: 36px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.tumodal__empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.tumodal__empty-text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tumodal__empty-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tumodal__sessions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tumodal__session {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.tumodal__session-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.tumodal__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f59e0b, #ec4899);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tumodal__session-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tumodal__asin {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+  text-decoration: none;
+  width: fit-content;
+  transition: color 0.15s;
+}
+.tumodal__asin:hover { color: var(--accent); text-decoration: underline; }
+
+.tumodal__product-meta {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tumodal__session-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.tumodal__time {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tumodal__badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.30);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.tumodal__changes {
+  margin: 0;
+  padding: 4px 6px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.tumodal__change {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.8fr);
+  gap: 12px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 8px;
+}
+.tumodal__change:hover { background: var(--surface-2); }
+
+.tumodal__change-field {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tumodal__change-delta {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tumodal__change-delta--up { color: #047857; }
+.tumodal__change-delta--down { color: #b91c1c; }
+
+.tumodal__change-arrow {
+  color: var(--border);
+  margin: 0 4px;
+}
+
+.tumodal__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.tumodal__btn {
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #fff;
+  border: 1px solid transparent;
+  cursor: pointer;
+  box-shadow: 0 6px 16px -6px rgba(99, 102, 241, 0.55);
+  transition: filter 0.15s, box-shadow 0.15s, transform 0.05s;
+}
+.tumodal__btn:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 10px 22px -8px rgba(99, 102, 241, 0.55);
+}
+.tumodal__btn:active { transform: translateY(1px); }
+
+@media (max-width: 640px) {
+  .tumodal__backdrop {
+    padding: 12px;
+    align-items: stretch;
+  }
+  .tumodal { max-height: calc(100vh - 24px); }
+  .tumodal__head { padding: 16px 18px 12px; }
+  .tumodal__body { padding: 14px 16px; }
+  .tumodal__change {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .tumodal__session-head { flex-wrap: wrap; }
+  .tumodal__session-right { width: 100%; flex-direction: row; align-items: center; justify-content: space-between; }
+}

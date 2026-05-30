@@ -28,6 +28,7 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   getAllProducts,
+  updateProduct as svcUpdateProduct,
   updateProductPrice as svcUpdatePrice,
 } from '../services/productService.js';
 import {
@@ -51,6 +52,7 @@ export const ProductProvider = ({ children }) => {
   const [savingId, setSavingId] = useState(null);
 
   const loadAll = useCallback(async () => {
+    if (!user?.token) return;
     setError(null);
     setLoading(true);
     try {
@@ -62,53 +64,56 @@ export const ProductProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.token]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [p, h] = await Promise.all([getAllProducts(), getHistory()]);
-        if (cancelled) return;
-        setProducts(p);
-        setHistory(h);
-      } catch (e) {
-        if (!cancelled) setError(e?.message || 'Failed to load data.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!user?.token) {
+      setProducts([]);
+      setHistory([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    loadAll();
+  }, [user?.token, loadAll]);
 
   const updatePrice = useCallback(
     async (id, newPrice) => {
       setSavingId(id);
       try {
-        const result = await svcUpdatePrice({ id, newPrice });
+        const result = await svcUpdatePrice({
+          id,
+          newPrice,
+          updatedBy: user?.email || 'unknown',
+        });
         if (!result.ok) {
           showToast(result.error || 'Update failed.', 'error');
           return result;
         }
 
-        const entry = {
-          id: `h-${Date.now()}-${id}`,
-          asin: result.product.asin,
-          oldPrice: result.oldPrice,
-          newPrice: result.product.currentPrice,
-          updatedBy: user?.email || 'unknown',
-          timestamp: formatTimestamp(new Date()),
-          updateNumber: result.product.totalUpdates,
-        };
+        const entry =
+          result.entry || {
+            id: `h-${Date.now()}-${id}`,
+            asin: result.product.asin,
+            oldPrice: result.oldPrice,
+            newPrice: result.product.currentPrice,
+            updatedBy: user?.email || 'unknown',
+            timestamp: formatTimestamp(new Date()),
+            updateNumber: result.product.totalUpdates,
+          };
 
         await addHistoryRecord(entry);
 
+        setHistory((prev) => {
+          const asin = result.product.asin;
+          const updateNumber =
+            prev.filter((h) => h.asin === asin).length + 1;
+          return [{ ...entry, updateNumber }, ...prev];
+        });
+
         setProducts((prev) =>
-          prev.map((p) => (p.id === id ? result.product : p)),
+          prev.map((p) => (p.id === id ? { ...p, ...result.product } : p)),
         );
-        setHistory((prev) => [entry, ...prev]);
 
         showToast(
           `Saved · ${entry.asin} → ${formatPrice(entry.newPrice)}`,
@@ -116,6 +121,62 @@ export const ProductProvider = ({ children }) => {
         );
 
         return { ok: true, entry };
+      } catch (e) {
+        const msg = e?.message || 'Update failed.';
+        showToast(msg, 'error');
+        return { ok: false, error: msg };
+      } finally {
+        setSavingId(null);
+      }
+    },
+    [user, showToast],
+  );
+
+  /**
+   * Save a multi-field edit from the popup modal.
+   *
+   *   id      = product ASIN
+   *   updates = partial map of editable keys → numbers
+   *
+   * After a successful write we refresh `products` with the canonical
+   * post-write row and reload `history` so the new audit rows appear
+   * in the right order. We do a full history reload (cheap, single
+   * GET) rather than synthesising rows client-side because the server
+   * appends multiple rows in one save and assigns the canonical timestamps.
+   */
+  const saveProductEdit = useCallback(
+    async (id, updates) => {
+      setSavingId(id);
+      try {
+        const result = await svcUpdateProduct({
+          id,
+          updates,
+          updatedBy: user?.email || 'unknown',
+        });
+        if (!result.ok) {
+          showToast(result.error || 'Update failed.', 'error');
+          return result;
+        }
+
+        setProducts((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, ...result.product } : p)),
+        );
+
+        try {
+          const fresh = await getHistory();
+          setHistory(fresh);
+        } catch {
+          // History reload is best-effort; the product update already succeeded.
+        }
+
+        const changedCount = (result.changedFields || []).length;
+        const summary =
+          changedCount > 0
+            ? `Saved · ${result.product.asin} · ${changedCount} field${changedCount === 1 ? '' : 's'} updated`
+            : `Saved · ${result.product.asin}`;
+        showToast(summary, 'success');
+
+        return { ok: true, product: result.product };
       } catch (e) {
         const msg = e?.message || 'Update failed.';
         showToast(msg, 'error');
@@ -135,9 +196,19 @@ export const ProductProvider = ({ children }) => {
       error,
       savingId,
       updatePrice,
+      saveProductEdit,
       refresh: loadAll,
     }),
-    [products, history, loading, error, savingId, updatePrice, loadAll],
+    [
+      products,
+      history,
+      loading,
+      error,
+      savingId,
+      updatePrice,
+      saveProductEdit,
+      loadAll,
+    ],
   );
 
   return (

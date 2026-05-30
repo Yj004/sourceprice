@@ -74,21 +74,22 @@
 
 .dash__layout {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 16px;
   align-items: start;
 }
 
-.dash__table { min-width: 0; }
-
-@media (max-width: 1280px) {
-  .dash__layout { grid-template-columns: 220px minmax(0, 1fr); }
-  .dash__layout > :last-child { grid-column: 1 / -1; }
+.dash__main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
 }
 
-@media (max-width: 900px) {
+.dash__table { min-width: 0; }
+
+@media (max-width: 1100px) {
   .dash__layout { grid-template-columns: 1fr; }
-  .dash__layout > :last-child { grid-column: auto; }
 }
 
 @media (max-width: 560px) {
