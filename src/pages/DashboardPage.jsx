@@ -4,21 +4,9 @@
  * Orchestrates the dashboard view. Reads ALL data from ProductContext
  * (which itself talks to the services layer); it never touches
  * dummy data or localStorage directly.
- *
- *   Navbar
- *   ┌─────────────────────────────────────────────────────────────┐
- *   │  Stats cards (4)                                             │
- *   ├──────┬──────────────────────────────┬─────────────────────┤
- *   │ Flt  │   Product Table (filtered)   │  Recent History     │
- *   └──────┴──────────────────────────────┴─────────────────────┘
- *
- * Layers:
- *   - Filter state lives here (it's UI-only).
- *   - Visible products derived via productService.filterProducts.
- *   - Stats derived via useMemo from products + history.
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar.jsx';
 import FilterPanel from '../components/FilterPanel.jsx';
 import ProductTable from '../components/ProductTable.jsx';
@@ -28,12 +16,21 @@ import EditProductModal from '../components/EditProductModal.jsx';
 import TodayUpdatesModal from '../components/TodayUpdatesModal.jsx';
 import { useAuth } from '../context/useAuth.js';
 import { useProducts } from '../context/useProducts.js';
-import { filterProducts, INITIAL_FILTERS } from '../services/productService.js';
+import { useDebounce } from '../hooks/useDebounce.js';
+import {
+  buildOptionCounts,
+  filterProducts,
+  getAvailableBrands,
+  getAvailablePlcs,
+  INITIAL_FILTERS,
+} from '../services/productService.js';
 import { attachUpdateCounts, countEditSessions } from '../utils/countUpdates.js';
+import { groupBySession } from '../utils/historyGrouping.js';
 import { isSameLocalDay, parseTimestamp } from '../utils/format.js';
 import './DashboardPage.css';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const SEARCH_LIST_LIMIT = 60;
 
 const DashboardPage = () => {
   const { user } = useAuth();
@@ -46,14 +43,33 @@ const DashboardPage = () => {
     saveProductEdit,
     refresh,
   } = useProducts();
-  const [filters, setFilters] = useState(INITIAL_FILTERS);
+
+  const [searchInput, setSearchInput] = useState(INITIAL_FILTERS.search);
+  const [brand, setBrand] = useState(INITIAL_FILTERS.brand);
+  const [plc, setPlc] = useState(INITIAL_FILTERS.plc);
+  const debouncedSearch = useDebounce(searchInput, 200);
+
   const [editingAsin, setEditingAsin] = useState(null);
   const [showMyUpdates, setShowMyUpdates] = useState(false);
-  // `statsTime` snapshots "now" so stats are pure w.r.t. their deps.
-  // It is initialized lazily on mount and bumped whenever the user
-  // explicitly refreshes — keeping the 24h rolling window honest
-  // without recomputing on every unrelated render.
   const [statsTime, setStatsTime] = useState(() => Date.now());
+
+  const filters = useMemo(
+    () => ({
+      search: debouncedSearch,
+      brand,
+      plc,
+    }),
+    [debouncedSearch, brand, plc],
+  );
+
+  const instantFilters = useMemo(
+    () => ({
+      search: searchInput,
+      brand,
+      plc,
+    }),
+    [searchInput, brand, plc],
+  );
 
   const currentEmail = String(user?.email || '').trim().toLowerCase();
 
@@ -67,8 +83,85 @@ const DashboardPage = () => {
     [productsWithCounts, filters],
   );
 
-  // History rows authored by the current user on today's local date.
-  // Powers both the "My Updates Today" KPI and the modal it opens.
+  const availablePlcs = useMemo(
+    () => getAvailablePlcs(productsWithCounts, instantFilters),
+    [productsWithCounts, instantFilters.brand, instantFilters.search],
+  );
+
+  const availableBrands = useMemo(
+    () => getAvailableBrands(productsWithCounts, instantFilters),
+    [productsWithCounts, instantFilters.plc, instantFilters.search],
+  );
+
+  const plcCounts = useMemo(
+    () => buildOptionCounts(productsWithCounts, instantFilters, 'plc'),
+    [productsWithCounts, instantFilters],
+  );
+
+  const brandCounts = useMemo(
+    () => buildOptionCounts(productsWithCounts, instantFilters, 'brand'),
+    [productsWithCounts, instantFilters],
+  );
+
+  const searchListProducts = useMemo(() => {
+    const matched = filterProducts(productsWithCounts, instantFilters);
+    return matched.slice(0, SEARCH_LIST_LIMIT);
+  }, [productsWithCounts, instantFilters]);
+
+  useEffect(() => {
+    if (brand && !availableBrands.includes(brand)) {
+      setBrand('');
+    }
+  }, [brand, availableBrands]);
+
+  useEffect(() => {
+    if (plc && !availablePlcs.includes(plc)) {
+      setPlc('');
+    }
+  }, [plc, availablePlcs]);
+
+  const handleBrandChange = useCallback(
+    (nextBrand) => {
+      setBrand(nextBrand);
+      if (plc && nextBrand) {
+        const stillValid = productsWithCounts.some(
+          (p) =>
+            String(p.brand || '').trim() === nextBrand &&
+            String(p.plc || '').trim() === plc,
+        );
+        if (!stillValid) setPlc('');
+      }
+    },
+    [plc, productsWithCounts],
+  );
+
+  const handlePlcChange = useCallback(
+    (nextPlc) => {
+      setPlc(nextPlc);
+      if (brand && nextPlc) {
+        const stillValid = productsWithCounts.some(
+          (p) =>
+            String(p.plc || '').trim() === nextPlc &&
+            String(p.brand || '').trim() === brand,
+        );
+        if (!stillValid) setBrand('');
+      }
+    },
+    [brand, productsWithCounts],
+  );
+
+  const handlePickProduct = useCallback((product) => {
+    setSearchInput(product.asin || '');
+    if (product.brand) setBrand(String(product.brand).trim());
+    if (product.plc) setPlc(String(product.plc).trim());
+  }, []);
+
+  const handleResetFilters = useCallback(() => {
+    setSearchInput(INITIAL_FILTERS.search);
+    setBrand(INITIAL_FILTERS.brand);
+    setPlc(INITIAL_FILTERS.plc);
+  }, []);
+
   const myTodayHistory = useMemo(() => {
     if (!currentEmail) return [];
     const refDate = new Date(statsTime);
@@ -82,8 +175,6 @@ const DashboardPage = () => {
   const stats = useMemo(() => {
     const refDate = new Date(statsTime);
 
-    const totalUpdates = countEditSessions(history);
-
     const todayHistory = history.filter((h) =>
       isSameLocalDay(h.timestamp, refDate),
     );
@@ -95,8 +186,10 @@ const DashboardPage = () => {
 
     return {
       totalProducts: products.length,
-      totalUpdates,
-      productsUpdatedToday: new Set(todayHistory.map((h) => h.asin)).size,
+      totalUpdates: countEditSessions(history),
+      productsUpdatedToday: new Set(
+        groupBySession(todayHistory).map((s) => s.asin).filter(Boolean),
+      ).size,
       recentActivity: countEditSessions(recentRows),
       myUpdatesToday: countEditSessions(myTodayHistory),
     };
@@ -154,10 +247,19 @@ const DashboardPage = () => {
         <div className="dash__layout">
           <section className="dash__main">
             <FilterPanel
-              value={filters}
-              onChange={setFilters}
-              onReset={() => setFilters(INITIAL_FILTERS)}
-              products={productsWithCounts}
+              searchInput={searchInput}
+              onSearchInputChange={setSearchInput}
+              brand={brand}
+              plc={plc}
+              onBrandChange={handleBrandChange}
+              onPlcChange={handlePlcChange}
+              onPickProduct={handlePickProduct}
+              onReset={handleResetFilters}
+              availablePlcs={availablePlcs}
+              availableBrands={availableBrands}
+              plcCounts={plcCounts}
+              brandCounts={brandCounts}
+              listProducts={searchListProducts}
               resultCount={visibleProducts.length}
               totalCount={products.length}
             />

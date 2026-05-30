@@ -193,8 +193,8 @@
   gap: 1px;
 }
 
-.tumodal__asin {
-  font-size: 13px;
+.tumodal__model {
+  font-size: 14px;
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--text);
@@ -202,7 +202,14 @@
   width: fit-content;
   transition: color 0.15s;
 }
-.tumodal__asin:hover { color: var(--accent); text-decoration: underline; }
+.tumodal__model:hover { color: var(--accent); text-decoration: underline; }
+
+.tumodal__asin {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+}
 
 .tumodal__product-meta {
   font-size: 11px;

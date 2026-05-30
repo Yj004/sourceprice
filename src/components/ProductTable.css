@@ -26,7 +26,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  text-align: left;
+  text-align: center;
   font-weight: 600;
   font-size: 11px;
   text-transform: uppercase;
@@ -44,6 +44,7 @@
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
+  text-align: center;
   vertical-align: middle;
   background: var(--surface);
   transition: background 0.15s ease;
@@ -108,7 +109,8 @@
   font-size: 12.5px;
   color: var(--muted);
 }
-.ptable__num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+.ptable__num { text-align: center; font-variant-numeric: tabular-nums; font-weight: 500; }
+.ptable__chip-col { text-align: center; }
 .ptable__total { font-weight: 600; color: var(--text); }
 
 .ptable__chip {
@@ -192,8 +194,8 @@
 }
 .ptable__history-btn:active { transform: translateY(1px); }
 
-.ptable__actions { text-align: right; }
-.ptable__btns { display: inline-flex; gap: 6px; justify-content: flex-end; }
+.ptable__actions { text-align: center; }
+.ptable__btns { display: inline-flex; gap: 6px; justify-content: center; }
 
 .ptable__save,
 .ptable__cancel,
@@ -327,7 +329,7 @@
     letter-spacing: 0.04em;
     font-weight: 600;
   }
-  .ptable__num { text-align: right; }
+  .ptable__num { text-align: center; }
   .ptable__history-cell { justify-content: center; }
   .ptable__actions { justify-content: flex-end; padding-top: 8px !important; }
   .ptable__edit { width: 140px; }

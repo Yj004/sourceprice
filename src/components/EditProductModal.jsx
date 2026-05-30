@@ -14,7 +14,8 @@
  * The modal is purely presentational. It calls the supplied
  * `onSave(updates)` with the dirty fields only (the parent decides
  * how / where to persist). Pressing Escape or clicking the backdrop
- * cancels; pressing Enter inside any field saves.
+ * cancels; save only via the Save changes button. Enter moves to the
+ * next field without saving.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -211,9 +212,17 @@ const EditProductModal = ({ product, onClose, onSave, isSaving = false }) => {
   };
 
   const onKeyDown = (e) => {
-    if (e.key === 'Enter' && !isSaving) {
-      e.preventDefault();
-      handleSave();
+    if (e.key !== 'Enter' || isSaving) return;
+    if (e.target.tagName !== 'INPUT') return;
+
+    e.preventDefault();
+
+    const inputs = Array.from(
+      dialogRef.current?.querySelectorAll('input[data-field]') ?? [],
+    );
+    const idx = inputs.indexOf(e.target);
+    if (idx >= 0 && idx < inputs.length - 1) {
+      inputs[idx + 1].focus();
     }
   };
 

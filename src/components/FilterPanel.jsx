@@ -1,17 +1,9 @@
 /**
- * FilterPanel
- * ----------------------------------------------------------------
- * Multi-filter bar above the product table:
- *
- *   - Search anything (text input)
- *   - PLC / Brand / Master Category (custom dropdowns — click to
- *     open a panel with every option visible + search inside)
- *
- * All filters combine with AND.
+ * FilterPanel — synchronized Search + PLC + Brand filters.
+ * All three inputs share one filter model (owned by DashboardPage).
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { buildFieldOptions, filterProducts } from '../services/productService.js';
 import './FilterPanel.css';
 
 const SearchIcon = () => (
@@ -52,51 +44,29 @@ const ChevronIcon = ({ open }) => (
   </svg>
 );
 
-/**
- * Custom dropdown — click the trigger to open a scrollable panel
- * listing every option. Includes an inner search box to narrow long
- * lists without hiding the full option set on first open.
- */
-/**
- * Search box with a product picker panel. When PLC / Brand / Category
- * dropdowns are set, clicking or focusing the search field opens a
- * scrollable list of matching products so the user can pick one
- * instead of typing.
- */
-const SearchProductPicker = ({ value, onChange, products, dropdownFilters }) => {
+const formatOptionLabel = (value, count) => {
+  if (count == null) return value;
+  return `${value} (${count.toLocaleString('en-IN')})`;
+};
+
+const SearchProductPicker = ({
+  searchInput,
+  onSearchInputChange,
+  listProducts,
+  onPickProduct,
+  brand,
+  plc,
+  resultCount,
+}) => {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const inputRef = useRef(null);
   const listId = useId();
 
-  const q = String(value || '').trim();
+  const q = String(searchInput || '').trim();
   const hasValue = q.length > 0;
-
-  const scopedProducts = useMemo(
-    () =>
-      filterProducts(products, {
-        plc: dropdownFilters.plc || '',
-        brand: dropdownFilters.brand || '',
-        masterCategory: dropdownFilters.masterCategory || '',
-        q: '',
-      }),
-    [products, dropdownFilters],
-  );
-
-  const hasDropdownFilter =
-    Boolean(dropdownFilters.plc) ||
-    Boolean(dropdownFilters.brand) ||
-    Boolean(dropdownFilters.masterCategory);
-
-  const listProducts = useMemo(() => {
-    const needle = q.toLowerCase();
-    if (!needle) return scopedProducts;
-    return scopedProducts.filter((p) => {
-      const hay =
-        `${p.asin} ${p.brand} ${p.modelNo} ${p.masterCategory} ${p.plc} ${p.packSize}`.toLowerCase();
-      return hay.includes(needle);
-    });
-  }, [scopedProducts, q]);
+  const hasDropdownFilter = Boolean(brand) || Boolean(plc);
+  const showSuggestions = q.length >= 2 || hasDropdownFilter;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -121,13 +91,13 @@ const SearchProductPicker = ({ value, onChange, products, dropdownFilters }) => 
   const openPanel = () => setOpen(true);
 
   const pickProduct = (p) => {
-    onChange(p.asin);
+    onPickProduct?.(p);
     setOpen(false);
     inputRef.current?.blur();
   };
 
   const placeholder = hasDropdownFilter
-    ? `Search or pick from ${scopedProducts.length.toLocaleString('en-IN')} product${scopedProducts.length === 1 ? '' : 's'}…`
+    ? `Search within ${resultCount.toLocaleString('en-IN')} matching product${resultCount === 1 ? '' : 's'}…`
     : 'ASIN, brand, model, PLC, category, pack size…';
 
   return (
@@ -137,8 +107,8 @@ const SearchProductPicker = ({ value, onChange, products, dropdownFilters }) => 
     >
       <span className="fbar__field-label">
         Search anything
-        {hasDropdownFilter && (
-          <span className="fbar__field-count">{scopedProducts.length}</span>
+        {(hasDropdownFilter || q.length >= 2) && (
+          <span className="fbar__field-count">{listProducts.length}</span>
         )}
       </span>
 
@@ -148,9 +118,9 @@ const SearchProductPicker = ({ value, onChange, products, dropdownFilters }) => 
           type="search"
           className="fbar__input fbar__input--search"
           placeholder={placeholder}
-          value={value || ''}
+          value={searchInput || ''}
           onChange={(e) => {
-            onChange(e.target.value);
+            onSearchInputChange(e.target.value);
             openPanel();
           }}
           onFocus={openPanel}
@@ -164,7 +134,7 @@ const SearchProductPicker = ({ value, onChange, products, dropdownFilters }) => 
             type="button"
             className="fbar__clear-input fbar__clear-input--search"
             onClick={() => {
-              onChange('');
+              onSearchInputChange('');
               setOpen(false);
             }}
             aria-label="Clear search"
@@ -184,11 +154,11 @@ const SearchProductPicker = ({ value, onChange, products, dropdownFilters }) => 
         </button>
       </div>
 
-      {open && (
+      {open && showSuggestions && (
         <div className="fbar__dd-panel fbar__dd-panel--search" role="presentation">
           <div className="fbar__dd-panel-head">
             <span className="fbar__dd-panel-title">
-              {hasDropdownFilter ? 'Products in selection' : 'All products'}
+              {hasDropdownFilter ? 'Matching products' : 'Search results'}
             </span>
             <span className="fbar__dd-panel-meta">
               {listProducts.length.toLocaleString('en-IN')} shown
@@ -199,10 +169,8 @@ const SearchProductPicker = ({ value, onChange, products, dropdownFilters }) => 
             <p className="fbar__search-hint">
               Filtered by{' '}
               {[
-                dropdownFilters.plc && `PLC: ${dropdownFilters.plc}`,
-                dropdownFilters.brand && `Brand: ${dropdownFilters.brand}`,
-                dropdownFilters.masterCategory &&
-                  `Category: ${dropdownFilters.masterCategory}`,
+                brand && `Brand: ${brand}`,
+                plc && `PLC: ${plc}`,
               ]
                 .filter(Boolean)
                 .join(' · ')}
@@ -212,7 +180,7 @@ const SearchProductPicker = ({ value, onChange, products, dropdownFilters }) => 
           <ul id={listId} className="fbar__dd-list fbar__dd-list--products" role="listbox">
             {listProducts.length === 0 ? (
               <li className="fbar__dd-empty" role="presentation">
-                No products match your search.
+                No products match your filters.
               </li>
             ) : (
               listProducts.map((p) => (
@@ -229,10 +197,14 @@ const SearchProductPicker = ({ value, onChange, products, dropdownFilters }) => 
                       {p.brand || '—'} · {p.modelNo || '—'}
                     </span>
                     <span className="fbar__product-tags">
-                      {p.plc && <span className="fbar__product-tag">{p.plc}</span>}
-                      {p.packSize && (
-                        <span className="fbar__product-tag">Pack {p.packSize}</span>
+                      {p.plc && (
+                        <span className="fbar__product-tag fbar__product-tag--plc">
+                          {p.plc}
+                        </span>
                       )}
+                      <span className="fbar__product-tag">
+                        Pack {p.packSize || '—'}
+                      </span>
                     </span>
                   </button>
                 </li>
@@ -249,6 +221,7 @@ const FilterDropdown = ({
   label,
   value,
   options,
+  optionCounts,
   onChange,
   placeholder,
   allLabel,
@@ -308,6 +281,8 @@ const FilterDropdown = ({
     });
   };
 
+  const allCount = options.length;
+
   return (
     <div
       ref={rootRef}
@@ -327,7 +302,9 @@ const FilterDropdown = ({
         aria-controls={listId}
       >
         <span className={`fbar__dd-value ${!hasValue ? 'fbar__dd-value--placeholder' : ''}`}>
-          {hasValue ? selected : placeholder}
+          {hasValue
+            ? formatOptionLabel(selected, optionCounts?.get(selected))
+            : `${placeholder} (${allCount})`}
         </span>
         <ChevronIcon open={open} />
       </button>
@@ -382,7 +359,7 @@ const FilterDropdown = ({
                 className={`fbar__dd-option fbar__dd-option--all ${!hasValue ? 'fbar__dd-option--selected' : ''}`}
                 onClick={() => pick('')}
               >
-                {allLabel}
+                {allLabel} ({allCount})
               </button>
             </li>
             {filtered.length === 0 ? (
@@ -399,7 +376,7 @@ const FilterDropdown = ({
                     className={`fbar__dd-option ${selected === opt ? 'fbar__dd-option--selected' : ''}`}
                     onClick={() => pick(opt)}
                   >
-                    {opt}
+                    {formatOptionLabel(opt, optionCounts?.get(opt))}
                   </button>
                 </li>
               ))
@@ -412,34 +389,24 @@ const FilterDropdown = ({
 };
 
 const FilterPanel = ({
-  value,
-  onChange,
+  searchInput,
+  onSearchInputChange,
+  brand,
+  plc,
+  onBrandChange,
+  onPlcChange,
+  onPickProduct,
   onReset,
-  products = [],
+  availablePlcs = [],
+  availableBrands = [],
+  plcCounts,
+  brandCounts,
+  listProducts = [],
   resultCount,
   totalCount,
 }) => {
-  const filters = value || {};
-  const patch = (next) => onChange?.({ ...filters, ...next });
-
-  const plcOptions = useMemo(
-    () => buildFieldOptions(products, 'plc'),
-    [products],
-  );
-  const brandOptions = useMemo(
-    () => buildFieldOptions(products, 'brand'),
-    [products],
-  );
-  const categoryOptions = useMemo(
-    () => buildFieldOptions(products, 'masterCategory'),
-    [products],
-  );
-
   const activeCount =
-    (filters.q ? 1 : 0) +
-    (filters.plc ? 1 : 0) +
-    (filters.brand ? 1 : 0) +
-    (filters.masterCategory ? 1 : 0);
+    (searchInput?.trim() ? 1 : 0) + (plc ? 1 : 0) + (brand ? 1 : 0);
   const hasAny = activeCount > 0;
 
   return (
@@ -456,41 +423,34 @@ const FilterPanel = ({
 
       <div className="fbar__search-row">
         <SearchProductPicker
-          value={filters.q || ''}
-          onChange={(v) => patch({ q: v })}
-          products={products}
-          dropdownFilters={{
-            plc: filters.plc || '',
-            brand: filters.brand || '',
-            masterCategory: filters.masterCategory || '',
-          }}
+          searchInput={searchInput}
+          onSearchInputChange={onSearchInputChange}
+          listProducts={listProducts}
+          onPickProduct={onPickProduct}
+          brand={brand}
+          plc={plc}
+          resultCount={resultCount ?? 0}
         />
       </div>
 
       <div className="fbar__dropdowns">
         <FilterDropdown
           label="PLC"
-          value={filters.plc || ''}
-          options={plcOptions}
-          onChange={(v) => patch({ plc: v })}
+          value={plc}
+          options={availablePlcs}
+          optionCounts={plcCounts}
+          onChange={onPlcChange}
           placeholder="All PLCs"
           allLabel="All PLCs"
         />
         <FilterDropdown
           label="Brand"
-          value={filters.brand || ''}
-          options={brandOptions}
-          onChange={(v) => patch({ brand: v })}
+          value={brand}
+          options={availableBrands}
+          optionCounts={brandCounts}
+          onChange={onBrandChange}
           placeholder="All brands"
           allLabel="All brands"
-        />
-        <FilterDropdown
-          label="Master Category"
-          value={filters.masterCategory || ''}
-          options={categoryOptions}
-          onChange={(v) => patch({ masterCategory: v })}
-          placeholder="All categories"
-          allLabel="All categories"
         />
 
         <button
@@ -512,7 +472,15 @@ const FilterPanel = ({
         <span className="fbar__count-of">
           product{(totalCount ?? 0) === 1 ? '' : 's'}
         </span>
-        {hasAny && <span className="fbar__count-hint">· filtered</span>}
+        {hasAny && (
+          <button
+            type="button"
+            className="fbar__inline-reset"
+            onClick={onReset}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
     </section>
   );

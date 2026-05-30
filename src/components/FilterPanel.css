@@ -585,7 +585,28 @@
 }
 
 .fbar__count-of { color: var(--muted); }
-.fbar__count-hint { color: var(--accent); font-weight: 600; }
+
+.fbar__inline-reset {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6366f1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.fbar__inline-reset:hover {
+  color: #4338ca;
+}
+
+.fbar__product-tag--plc {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+  font-weight: 700;
+}
 
 /* ─── Responsive ─────────────────────────────────────────── */
 
@@ -594,12 +615,10 @@
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       'plc    brand'
-      'cat    cat'
       'reset  reset';
   }
   .fbar__dropdowns > .fbar__dd:nth-child(1) { grid-area: plc; }
   .fbar__dropdowns > .fbar__dd:nth-child(2) { grid-area: brand; }
-  .fbar__dropdowns > .fbar__dd:nth-child(3) { grid-area: cat; }
   .fbar__dropdowns > .fbar__reset { grid-area: reset; width: 100%; justify-content: center; }
 
   .fbar__dd-panel {
@@ -614,7 +633,6 @@
     grid-template-areas:
       'plc'
       'brand'
-      'cat'
       'reset';
   }
 

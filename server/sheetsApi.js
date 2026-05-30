@@ -1,13 +1,37 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { google } from 'googleapis';
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 export const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const INLINE_CREDS_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-const CREDS_PATH =
-  process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-  new URL('../credentials/google-service-account.json', import.meta.url).pathname;
+
+const resolveCredentialsPath = () => {
+  const fromEnv = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (fromEnv) {
+    return isAbsolute(fromEnv) ? fromEnv : resolve(process.cwd(), fromEnv);
+  }
+  return fileURLToPath(
+    new URL('../credentials/google-service-account.json', import.meta.url),
+  );
+};
+
+const CREDS_PATH = resolveCredentialsPath();
+
+const loadCredentials = () => {
+  if (INLINE_CREDS_JSON) {
+    return JSON.parse(INLINE_CREDS_JSON);
+  }
+  if (!existsSync(CREDS_PATH)) {
+    throw new Error(
+      `Google service account file not found at ${CREDS_PATH}. ` +
+        'Save your service account JSON there, or set GOOGLE_SERVICE_ACCOUNT_JSON in .env.',
+    );
+  }
+  return JSON.parse(readFileSync(CREDS_PATH, 'utf8'));
+};
 
 let sheetsApi = null;
 
@@ -17,9 +41,7 @@ export const getSheets = () => {
     throw new Error('GOOGLE_SHEET_ID is not set in environment.');
   }
 
-  const credentials = INLINE_CREDS_JSON
-    ? JSON.parse(INLINE_CREDS_JSON)
-    : JSON.parse(readFileSync(CREDS_PATH, 'utf8'));
+  const credentials = loadCredentials();
   const auth = new google.auth.GoogleAuth({ credentials, scopes: SCOPES });
   sheetsApi = google.sheets({ version: 'v4', auth });
   return sheetsApi;

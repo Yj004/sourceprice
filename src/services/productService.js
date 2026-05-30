@@ -17,53 +17,92 @@ export const updateProduct = async ({ id, updates, updatedBy }) => {
 };
 
 /**
- * Pure filter — kept here so the same logic can later run server-side.
- *
- * Accepts a partial map of `{ q, plc, brand, masterCategory }`.
- * All non-empty entries are AND-combined. `q` is a free-text search
- * that matches against ASIN / brand / model / PLC / category / pack
- * size (case-insensitive substring). The other keys do a
- * case-insensitive substring match on the corresponding product field
- * (so typing "rob" matches "Robustt" too).
- *
- * `INITIAL_FILTERS` is the canonical empty state — exported so the
- * UI and any future server route stay in sync about the shape.
+ * Unified filter shape for Search + PLC + Brand (AND-combined).
  */
 export const INITIAL_FILTERS = {
-  q: '',
-  plc: '',
+  search: '',
   brand: '',
-  masterCategory: '',
+  plc: '',
 };
 
 const norm = (v) => String(v ?? '').trim().toLowerCase();
 
+export const productSearchHaystack = (p) =>
+  `${p.asin} ${p.brand} ${p.modelNo} ${p.masterCategory} ${p.plc} ${p.packSize}`.toLowerCase();
+
+export const matchesSearch = (p, q) => {
+  const needle = norm(q);
+  if (!needle) return true;
+  return productSearchHaystack(p).includes(needle);
+};
+
+const readSearch = (filters) => norm(filters.search ?? filters.q);
+
+/**
+ * Intersection filter — brand (exact), plc (exact), search (substring).
+ */
 export const filterProducts = (products, filters = {}) => {
-  const q = norm(filters.q);
+  const search = readSearch(filters);
   const plc = norm(filters.plc);
   const brand = norm(filters.brand);
-  const category = norm(filters.masterCategory);
 
-  if (!q && !plc && !brand && !category) return products;
+  if (!search && !plc && !brand) return products;
 
   return products.filter((p) => {
-    // Dropdown picks are exact values from the option list.
-    if (plc && norm(p.plc) !== plc) return false;
     if (brand && norm(p.brand) !== brand) return false;
-    if (category && norm(p.masterCategory) !== category) return false;
-    if (q) {
-      const hay =
-        `${p.asin} ${p.brand} ${p.modelNo} ${p.masterCategory} ${p.plc} ${p.packSize}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
+    if (plc && norm(p.plc) !== plc) return false;
+    if (search && !matchesSearch(p, search)) return false;
     return true;
   });
 };
 
 /**
- * Build the list of unique values for a given product field, used to
- * power the autocomplete <datalist> in the filter panel. Empty values
- * are skipped, and the result is sorted for stable UI.
+ * PLC options scoped by selected brand + search (not current PLC).
+ */
+export const getAvailablePlcs = (products, filters = {}) =>
+  buildFieldOptions(
+    filterProducts(products, {
+      brand: filters.brand,
+      search: filters.search ?? filters.q,
+      plc: '',
+    }),
+    'plc',
+  );
+
+/**
+ * Brand options scoped by selected PLC + search (not current brand).
+ */
+export const getAvailableBrands = (products, filters = {}) =>
+  buildFieldOptions(
+    filterProducts(products, {
+      plc: filters.plc,
+      search: filters.search ?? filters.q,
+      brand: '',
+    }),
+    'brand',
+  );
+
+/**
+ * Count products for each option value given the other active filters.
+ */
+export const buildOptionCounts = (products, filters, field) => {
+  const counts = new Map();
+  const options =
+    field === 'plc'
+      ? getAvailablePlcs(products, filters)
+      : getAvailableBrands(products, filters);
+
+  for (const value of options) {
+    counts.set(
+      value,
+      filterProducts(products, { ...filters, [field]: value }).length,
+    );
+  }
+  return counts;
+};
+
+/**
+ * Build the list of unique values for a given product field.
  */
 export const buildFieldOptions = (products, field) => {
   const seen = new Set();

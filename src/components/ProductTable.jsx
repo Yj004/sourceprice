@@ -14,14 +14,13 @@ import './ProductTable.css';
 
 const ROW_HEIGHT = 49;
 const MOBILE_PAGE_SIZE = 30;
-const COL_COUNT = 9;
+const COL_COUNT = 8;
 
 const HEADERS = [
   { label: 'Brand' },
   { label: 'Model No' },
-  { label: 'Master Category' },
   { label: 'Pack size', numeric: true },
-  { label: 'PLC' },
+  { label: 'PLC', chip: true },
   { label: 'Total Cost', numeric: true },
   { label: 'CATAGORY TEAM COST', numeric: true },
   { label: '', historyCol: true },
@@ -61,6 +60,7 @@ const TableHead = () => (
           key={i}
           className={[
             h.numeric ? 'ptable__num' : '',
+            h.chip ? 'ptable__chip-col' : '',
             h.historyCol ? 'ptable__history-th' : '',
           ]
             .filter(Boolean)

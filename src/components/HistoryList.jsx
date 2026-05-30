@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { formatHistoryValue, isNumericValue } from '../utils/historyGrouping.js';
 import { formatPrice } from '../utils/format.js';
 import './HistoryPanel.css';
@@ -18,13 +19,34 @@ const ArrowDown = () => (
   </svg>
 );
 
-const productLine = (entry) => {
+const ProductIdentity = ({ entry }) => {
   const model = String(entry.snapshot?.modelNo ?? entry.modelNo ?? '').trim();
+  const asin = String(entry.asin ?? '').trim();
+  const brand = String(entry.brand ?? entry.snapshot?.brand ?? '').trim();
   const pack = String(entry.snapshot?.packSize ?? '').trim();
-  const parts = [];
-  if (model) parts.push(model);
-  if (pack) parts.push(`Pack ${pack}`);
-  return parts.length ? parts.join(' · ') : entry.brand || '—';
+  const primary = model || asin || '—';
+
+  return (
+    <div className="history__identity">
+      {asin ? (
+        <Link
+          to={`/product/${encodeURIComponent(asin)}`}
+          className="history__model"
+          title={primary}
+        >
+          {primary}
+        </Link>
+      ) : (
+        <span className="history__model">{primary}</span>
+      )}
+      {asin && model && <span className="history__asin">{asin}</span>}
+      {(brand || pack) && (
+        <span className="history__product-meta">
+          {[brand, pack && `Pack ${pack}`].filter(Boolean).join(' · ')}
+        </span>
+      )}
+    </div>
+  );
 };
 
 const SnapshotSummary = ({ entry }) => {
@@ -68,9 +90,7 @@ const HistoryList = ({
               </span>
               <div className="history__content">
                 <div className="history__row">
-                  <span className="history__product" title={productLine(e)}>
-                    {productLine(e)}
-                  </span>
+                  <ProductIdentity entry={e} />
                   {typeof e.updateNumber === 'number' && (
                     <span className="history__badge">#{e.updateNumber}</span>
                   )}
@@ -105,9 +125,7 @@ const HistoryList = ({
             </span>
             <div className="history__content">
               <div className="history__row">
-                <span className="history__product" title={productLine(e)}>
-                  {productLine(e)}
-                </span>
+                <ProductIdentity entry={e} />
                 {typeof e.updateNumber === 'number' && (
                   <span className="history__badge">#{e.updateNumber}</span>
                 )}

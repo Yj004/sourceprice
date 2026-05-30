@@ -65,6 +65,9 @@ const ChevronRight = () => (
   </svg>
 );
 
+const formatStat = (value) =>
+  Number(value ?? 0).toLocaleString('en-IN');
+
 const StatCard = ({ label, value, hint, tone, icon, loading, onClick }) => {
   const clickable = typeof onClick === 'function';
   const Tag = clickable ? 'button' : 'div';
@@ -85,7 +88,7 @@ const StatCard = ({ label, value, hint, tone, icon, loading, onClick }) => {
       <div className="stat__body">
         <div className="stat__label">{label}</div>
         <div className="stat__value">
-          {loading ? <span className="stat__skel" /> : value}
+          {loading ? <span className="stat__skel" /> : formatStat(value)}
         </div>
         {hint && <div className="stat__hint">{hint}</div>}
       </div>
@@ -96,16 +99,16 @@ const StatCard = ({ label, value, hint, tone, icon, loading, onClick }) => {
 
 const StatsCards = ({ stats, loading = false, onOpenMyUpdates }) => (
   <div className="stats">
-    <StatCard tone="indigo"  icon={ICONS.products} label="Total Products"  value={stats.totalProducts}        loading={loading} />
-    <StatCard tone="violet"  icon={ICONS.updates}  label="Total Updates"   value={stats.totalUpdates}         hint="All-time" loading={loading} />
-    <StatCard tone="pink"    icon={ICONS.today}    label="Updated Today"   value={stats.productsUpdatedToday} hint="Unique ASINs" loading={loading} />
-    <StatCard tone="emerald" icon={ICONS.activity} label="Recent Activity" value={stats.recentActivity}       hint="Last 24h" loading={loading} />
+    <StatCard tone="indigo"  icon={ICONS.products} label="Total Products"  value={stats.totalProducts}        hint="In catalog" loading={loading} />
+    <StatCard tone="violet"  icon={ICONS.updates}  label="Total Updates"   value={stats.totalUpdates}         hint="Edit sessions · all time" loading={loading} />
+    <StatCard tone="pink"    icon={ICONS.today}    label="Updated Today"   value={stats.productsUpdatedToday} hint="Products edited today" loading={loading} />
+    <StatCard tone="emerald" icon={ICONS.activity} label="Recent Activity" value={stats.recentActivity}       hint="Edit sessions · last 24h" loading={loading} />
     <StatCard
       tone="amber"
       icon={ICONS.user}
       label="My Updates Today"
       value={stats.myUpdatesToday}
-      hint="Click to view details"
+      hint="Your edit sessions today"
       loading={loading}
       onClick={onOpenMyUpdates}
     />

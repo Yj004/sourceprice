@@ -9,6 +9,10 @@ initApp()
     });
   })
   .catch((e) => {
-    console.error('Failed to initialize users sheet:', e);
+    console.error('Failed to start API server:', e.message || e);
+    console.error(
+      '\nSetup: place google-service-account.json in sourceprice/credentials/\n' +
+        '       (or set GOOGLE_SERVICE_ACCOUNT_JSON in .env). See README.md.\n',
+    );
     process.exit(1);
   });

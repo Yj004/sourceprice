@@ -2,7 +2,7 @@
  * ProductRow — read-only row that defers editing to a modal popup.
  *
  * Columns (in render order, matching ProductTable headers):
- *   Brand · Model No · Master Category · Pack_size · PLC ·
+ *   Brand · Model No · Pack_size · PLC ·
  *   Total Cost · CATAGORY TEAM COST · History (link) · Edit (button)
  *
  * The dashboard intentionally hides ASIN and the raw source price
@@ -17,11 +17,10 @@ const ProductRow = ({ product, onEdit, isSaving = false, justSaved = false }) =>
   <tr className={`ptable__row ${justSaved ? 'ptable__row--flash' : ''}`}>
     <td data-label="Brand">{product.brand || '—'}</td>
     <td data-label="Model No" className="ptable__model">{product.modelNo || '—'}</td>
-    <td data-label="Master Category">
-      <span className="ptable__chip">{product.masterCategory || '—'}</span>
-    </td>
     <td data-label="Pack size" className="ptable__num">{product.packSize || '—'}</td>
-    <td data-label="PLC">{product.plc || '—'}</td>
+    <td data-label="PLC">
+      <span className="ptable__chip">{product.plc || '—'}</span>
+    </td>
 
     <td data-label="Total Cost" className="ptable__num ptable__total">
       {formatPrice(product.totalCost)}

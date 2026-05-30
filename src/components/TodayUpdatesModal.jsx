@@ -13,7 +13,9 @@
 
 import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { countEditSessions } from '../utils/countUpdates.js';
 import {
+  countFieldChanges,
   formatHistoryValue,
   groupBySession,
   isNumericValue,
@@ -47,9 +49,9 @@ const TodayUpdatesModal = ({
     };
   }, [onClose]);
 
-  const sessionCount = sessions.length;
-  const changeCount = sessions.reduce((n, s) => n + s.changes.length, 0);
-  const uniqueAsins = new Set(entries.map((e) => e.asin)).size;
+  const sessionCount = countEditSessions(entries);
+  const changeCount = countFieldChanges(entries);
+  const uniqueProducts = new Set(sessions.map((s) => s.asin).filter(Boolean)).size;
 
   return (
     <div
@@ -82,8 +84,8 @@ const TodayUpdatesModal = ({
               </span>
               <span className="tumodal__stat-sep" aria-hidden>·</span>
               <span className="tumodal__stat">
-                <strong>{uniqueAsins}</strong> product
-                {uniqueAsins === 1 ? '' : 's'}
+                <strong>{uniqueProducts}</strong> product
+                {uniqueProducts === 1 ? '' : 's'}
               </span>
             </p>
           </div>
@@ -128,14 +130,18 @@ const TodayUpdatesModal = ({
                     <div className="tumodal__session-meta">
                       <Link
                         to={`/product/${encodeURIComponent(s.asin)}`}
-                        className="tumodal__asin"
+                        className="tumodal__model"
                         onClick={() => onNavigate?.()}
                         title="View full product history"
                       >
-                        {s.asin}
+                        {s.modelNo || s.snapshot?.modelNo || s.asin || '—'}
                       </Link>
+                      <span className="tumodal__asin">{s.asin}</span>
                       <span className="tumodal__product-meta">
-                        {s.brand || '—'} · {s.modelNo || '—'}
+                        {s.brand || s.snapshot?.brand || '—'}
+                        {(s.snapshot?.packSize || s.packSize) && (
+                          <> · Pack {s.snapshot?.packSize || s.packSize}</>
+                        )}
                       </span>
                     </div>
                     <div className="tumodal__session-right">
