@@ -185,9 +185,9 @@ const ProductHistoryPage = () => {
           <div>
             <p className="phist__eyebrow">Change history</p>
             <h1 className="phist__title">{product.modelNo || '—'}</h1>
-            <p className="phist__asin">{product.asin}</p>
             <p className="phist__sub">
-              {product.brand || '—'} · {product.masterCategory || '—'}
+              {product.brand || '—'} · {product.asin || '—'} ·{' '}
+              {product.masterCategory || '—'}
             </p>
           </div>
           <div className="phist__head-stats">

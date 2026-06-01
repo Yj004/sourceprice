@@ -192,7 +192,6 @@ const SearchProductPicker = ({
                     className={`fbar__product-option ${q === p.asin ? 'fbar__product-option--selected' : ''}`}
                     onClick={() => pickProduct(p)}
                   >
-                    <span className="fbar__product-asin">{p.asin}</span>
                     <span className="fbar__product-meta">
                       {p.brand || '—'} · {p.modelNo || '—'}
                     </span>

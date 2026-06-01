@@ -64,7 +64,14 @@ const buildInitialDraft = (product) => {
   return draft;
 };
 
-const EditProductModal = ({ product, onClose, onSave, isSaving = false }) => {
+const EditProductModal = ({
+  product,
+  onClose,
+  onSave,
+  onSkip,
+  isSaving = false,
+  bulkProgress = null,
+}) => {
   const [draft, setDraft] = useState(() => buildInitialDraft(product));
   const [error, setError] = useState('');
   const [showValidation, setShowValidation] = useState(false);
@@ -205,10 +212,17 @@ const EditProductModal = ({ product, onClose, onSave, isSaving = false }) => {
 
     const result = await onSave?.(dirtyFields);
     if (result?.ok) {
-      onClose?.();
+      if (!result.keepOpen) {
+        onClose?.();
+      }
     } else if (result && !result.ok) {
       setError(result.error || 'Save failed.');
     }
+  };
+
+  const handleSkip = () => {
+    setError('');
+    onSkip?.();
   };
 
   const onKeyDown = (e) => {
@@ -244,7 +258,11 @@ const EditProductModal = ({ product, onClose, onSave, isSaving = false }) => {
       >
         <header className="emodal__head">
           <div className="emodal__head-text">
-            <p className="emodal__eyebrow">Edit product</p>
+            <p className="emodal__eyebrow">
+              {bulkProgress
+                ? `Bulk edit · ${bulkProgress.current} of ${bulkProgress.total}`
+                : 'Edit product'}
+            </p>
             <h2 id="emodal-title" className="emodal__title">
               {product.modelNo || product.asin}
             </h2>
@@ -378,13 +396,23 @@ const EditProductModal = ({ product, onClose, onSave, isSaving = false }) => {
                 : 'No changes yet'}
           </span>
           <div className="emodal__actions">
+            {bulkProgress && (
+              <button
+                type="button"
+                className="emodal__btn emodal__btn--ghost"
+                onClick={handleSkip}
+                disabled={isSaving}
+              >
+                Skip
+              </button>
+            )}
             <button
               type="button"
               className="emodal__btn emodal__btn--ghost"
               onClick={() => onClose?.()}
               disabled={isSaving}
             >
-              Cancel
+              {bulkProgress ? 'Stop' : 'Cancel'}
             </button>
             <button
               type="button"
@@ -392,7 +420,11 @@ const EditProductModal = ({ product, onClose, onSave, isSaving = false }) => {
               onClick={handleSave}
               disabled={isSaving || hasInvalid || dirtyCount === 0}
             >
-              {isSaving ? 'Saving…' : 'Save changes'}
+              {isSaving
+                ? 'Saving…'
+                : bulkProgress && bulkProgress.current < bulkProgress.total
+                  ? 'Save & next'
+                  : 'Save changes'}
             </button>
           </div>
         </footer>

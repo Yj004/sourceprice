@@ -50,6 +50,8 @@ const DashboardPage = () => {
   const debouncedSearch = useDebounce(searchInput, 200);
 
   const [editingAsin, setEditingAsin] = useState(null);
+  const [editQueue, setEditQueue] = useState([]);
+  const [selectedAsins, setSelectedAsins] = useState(() => new Set());
   const [showMyUpdates, setShowMyUpdates] = useState(false);
   const [statsTime, setStatsTime] = useState(() => Date.now());
 
@@ -119,6 +121,14 @@ const DashboardPage = () => {
       setPlc('');
     }
   }, [plc, availablePlcs]);
+
+  useEffect(() => {
+    setSelectedAsins((prev) => {
+      const visible = new Set(visibleProducts.map((p) => p.asin));
+      const next = new Set([...prev].filter((asin) => visible.has(asin)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visibleProducts]);
 
   const handleBrandChange = useCallback(
     (nextBrand) => {
@@ -205,8 +215,95 @@ const DashboardPage = () => {
     [productsWithCounts, editingAsin],
   );
 
-  const handleEditSave = (updates) =>
-    saveProductEdit(editingProduct.id, updates);
+  const bulkProgress = useMemo(() => {
+    if (!editQueue.length || !editingAsin) return null;
+    const idx = editQueue.indexOf(editingAsin);
+    if (idx < 0) return null;
+    return { current: idx + 1, total: editQueue.length };
+  }, [editQueue, editingAsin]);
+
+  const handleToggleSelect = useCallback((asin) => {
+    setSelectedAsins((prev) => {
+      const next = new Set(prev);
+      if (next.has(asin)) next.delete(asin);
+      else next.add(asin);
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(
+    (clearOnly = false) => {
+      if (clearOnly) {
+        setSelectedAsins(new Set());
+        return;
+      }
+      setSelectedAsins((prev) => {
+        const visibleAsins = visibleProducts.map((p) => p.asin);
+        const allSelected =
+          visibleAsins.length > 0 && visibleAsins.every((asin) => prev.has(asin));
+        if (allSelected) return new Set();
+        return new Set(visibleAsins);
+      });
+    },
+    [visibleProducts],
+  );
+
+  const handleSingleEdit = useCallback((product) => {
+    setEditQueue([]);
+    setEditingAsin(product.asin);
+  }, []);
+
+  const handleStartBulkEdit = useCallback(() => {
+    const queue = visibleProducts
+      .filter((p) => selectedAsins.has(p.asin))
+      .map((p) => p.asin);
+    if (queue.length < 2) return;
+    setEditQueue(queue);
+    setEditingAsin(queue[0]);
+  }, [visibleProducts, selectedAsins]);
+
+  const advanceBulkEdit = useCallback(() => {
+    const idx = editQueue.indexOf(editingAsin);
+    const nextAsin = idx >= 0 ? editQueue[idx + 1] : null;
+    if (nextAsin) {
+      setEditingAsin(nextAsin);
+      return;
+    }
+    setEditingAsin(null);
+    setEditQueue([]);
+  }, [editQueue, editingAsin]);
+
+  const handleCloseEdit = useCallback(() => {
+    setEditingAsin(null);
+    setEditQueue([]);
+  }, []);
+
+  const handleEditSave = useCallback(
+    async (updates) => {
+      if (!editingProduct) {
+        return { ok: false, error: 'No product selected.' };
+      }
+
+      const result = await saveProductEdit(editingProduct.id, updates);
+      if (!result?.ok) return result;
+
+      if (editQueue.length > 0) {
+        const idx = editQueue.indexOf(editingAsin);
+        const nextAsin = idx >= 0 ? editQueue[idx + 1] : null;
+        if (nextAsin) {
+          setEditingAsin(nextAsin);
+          return { ok: true, keepOpen: true };
+        }
+        setEditQueue([]);
+        setEditingAsin(null);
+        return { ok: true };
+      }
+
+      setEditingAsin(null);
+      return { ok: true };
+    },
+    [editQueue, editingAsin, editingProduct, saveProductEdit],
+  );
 
   return (
     <>
@@ -265,7 +362,11 @@ const DashboardPage = () => {
             />
             <ProductTable
               products={visibleProducts}
-              onEdit={(p) => setEditingAsin(p.asin)}
+              onEdit={handleSingleEdit}
+              onBulkEdit={handleStartBulkEdit}
+              selectedAsins={selectedAsins}
+              onToggleSelect={handleToggleSelect}
+              onToggleSelectAll={handleToggleSelectAll}
               loading={loading}
               error={error}
               savingId={savingId}
@@ -279,9 +380,11 @@ const DashboardPage = () => {
       {editingProduct && (
         <EditProductModal
           product={editingProduct}
-          onClose={() => setEditingAsin(null)}
+          onClose={handleCloseEdit}
           onSave={handleEditSave}
+          onSkip={advanceBulkEdit}
           isSaving={savingId === editingProduct.id}
+          bulkProgress={bulkProgress}
         />
       )}
 

@@ -140,7 +140,7 @@
 .fbar__product-option {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px 12px;
   align-items: center;
   padding: 10px 12px;
@@ -159,16 +159,6 @@
 
 .fbar__product-option--selected {
   background: rgba(99, 102, 241, 0.10);
-}
-
-.fbar__product-asin {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .fbar__product-meta {

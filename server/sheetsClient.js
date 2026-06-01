@@ -640,8 +640,18 @@ export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' 
     oldPrice: priceChange ? priceChange.oldValue : product.sourcePrice,
     entry,
     changedFields: changed.map((c) => c.field.key),
+    changes: changed.map((c) => ({
+      key: c.field.key,
+      label: c.field.label,
+      oldValue: c.oldValue,
+      newValue: c.newValue,
+    })),
     totalChanged,
+    oldTotalCost: prevTotalCostStored,
+    newTotalCost,
     priceUpdateLogged: Boolean(priceChange),
+    timestamp,
+    updatedBy,
   };
 };
 

@@ -77,6 +77,10 @@ const TableHead = () => (
 const ProductTable = ({
   products,
   onEdit,
+  onBulkEdit,
+  selectedAsins,
+  onToggleSelect,
+  onToggleSelectAll,
   loading = false,
   error = null,
   savingId = null,
@@ -147,17 +151,61 @@ const ProductTable = ({
     );
   }
 
+  const selectedSet = selectedAsins ?? new Set();
+  const selectedCount = products.filter((p) => selectedSet.has(p.asin)).length;
+  const allVisibleSelected =
+    products.length > 0 && selectedCount === products.length;
+  const someVisibleSelected = selectedCount > 0 && !allVisibleSelected;
+
   const renderRow = (p) => (
     <ProductRow
       key={p.id}
       product={p}
       onEdit={onEdit}
       isSaving={savingId === p.id}
+      selected={selectedSet.has(p.asin)}
+      onToggleSelect={onToggleSelect}
     />
   );
 
   return (
     <div className="ptable__shell">
+      {selectedCount > 0 && (
+        <div className="ptable__bulk-bar">
+          <span className="ptable__bulk-count">
+            <strong>{selectedCount}</strong> selected
+          </span>
+          <label className="ptable__bulk-select-all">
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someVisibleSelected;
+              }}
+              onChange={() => onToggleSelectAll?.()}
+              aria-label="Select all visible products"
+            />
+            Select all visible
+          </label>
+          {selectedCount >= 2 && (
+            <button
+              type="button"
+              className="ptable__bulk-edit"
+              onClick={() => onBulkEdit?.()}
+            >
+              Edit selected ({selectedCount})
+            </button>
+          )}
+          <button
+            type="button"
+            className="ptable__bulk-clear"
+            onClick={() => onToggleSelectAll?.(true)}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <div ref={scrollRef} className="ptable__wrap">
         <table className="ptable">
           <TableHead />

@@ -1,20 +1,28 @@
 /**
  * ProductRow — read-only row that defers editing to a modal popup.
- *
- * Columns (in render order, matching ProductTable headers):
- *   Brand · Model No · Pack_size · PLC ·
- *   Total Cost · CATAGORY TEAM COST · History (link) · Edit (button)
- *
- * The dashboard intentionally hides ASIN and the raw source price
- * (source_price_ex_gst). ASIN is still loaded for routing.
  */
 
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { formatPrice } from '../utils/format.js';
 
-const ProductRow = ({ product, onEdit, isSaving = false, justSaved = false }) => (
-  <tr className={`ptable__row ${justSaved ? 'ptable__row--flash' : ''}`}>
+const ProductRow = ({
+  product,
+  onEdit,
+  isSaving = false,
+  justSaved = false,
+  selected = false,
+  onToggleSelect,
+}) => (
+  <tr
+    className={[
+      'ptable__row',
+      justSaved ? 'ptable__row--flash' : '',
+      selected ? 'ptable__row--selected' : '',
+    ]
+      .filter(Boolean)
+      .join(' ')}
+  >
     <td data-label="Brand">{product.brand || '—'}</td>
     <td data-label="Model No" className="ptable__model">{product.modelNo || '—'}</td>
     <td data-label="Pack size" className="ptable__num">{product.packSize || '—'}</td>
@@ -46,15 +54,26 @@ const ProductRow = ({ product, onEdit, isSaving = false, justSaved = false }) =>
     </td>
 
     <td data-label="" className="ptable__actions">
-      <button
-        type="button"
-        className="ptable__edit-btn"
-        onClick={() => onEdit?.(product)}
-        disabled={isSaving}
-        title="Open edit dialog"
-      >
-        {isSaving ? '…' : 'Edit'}
-      </button>
+      <div className="ptable__action-group">
+        <label className="ptable__select-wrap" title="Select for bulk edit">
+          <input
+            type="checkbox"
+            className="ptable__select"
+            checked={selected}
+            onChange={() => onToggleSelect?.(product.asin)}
+            aria-label={`Select ${product.modelNo || product.asin}`}
+          />
+        </label>
+        <button
+          type="button"
+          className="ptable__edit-btn"
+          onClick={() => onEdit?.(product)}
+          disabled={isSaving}
+          title="Open edit dialog"
+        >
+          {isSaving ? '…' : 'Edit'}
+        </button>
+      </div>
     </td>
   </tr>
 );

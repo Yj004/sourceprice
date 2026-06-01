@@ -7,6 +7,7 @@ import {
   updateProduct,
   updateProductPrice,
 } from './sheetsClient.js';
+import { notifyCategoryTeamCostChange } from './emailService.js';
 import {
   createUser,
   deleteUser,
@@ -172,6 +173,19 @@ export const createApp = () => {
         res.status(400).json(result);
         return;
       }
+
+      notifyCategoryTeamCostChange({
+        product: result.product,
+        changes: result.changes,
+        updatedBy: result.updatedBy,
+        timestamp: result.timestamp,
+        totalChanged: result.totalChanged,
+        oldTotalCost: result.oldTotalCost,
+        newTotalCost: result.newTotalCost,
+      }).catch((err) => {
+        console.error('Category Team Cost email notification failed:', err);
+      });
+
       res.json(result);
     } catch (e) {
       console.error('PATCH /api/products/:asin', e);

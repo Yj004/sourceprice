@@ -28,17 +28,9 @@ const ProductIdentity = ({ entry }) => {
 
   return (
     <div className="history__identity">
-      {asin ? (
-        <Link
-          to={`/product/${encodeURIComponent(asin)}`}
-          className="history__model"
-          title={primary}
-        >
-          {primary}
-        </Link>
-      ) : (
-        <span className="history__model">{primary}</span>
-      )}
+      <span className="history__model" title={primary}>
+        {primary}
+      </span>
       {asin && model && <span className="history__asin">{asin}</span>}
       {(brand || pack) && (
         <span className="history__product-meta">
@@ -67,6 +59,34 @@ const SnapshotSummary = ({ entry }) => {
   );
 };
 
+const HistoryItemShell = ({ entry, asin, children }) => {
+  const label = String(entry.snapshot?.modelNo ?? entry.modelNo ?? asin ?? 'Product');
+
+  if (asin) {
+    return (
+      <Link
+        to={`/product/${encodeURIComponent(asin)}`}
+        className="history__card-link"
+        aria-label={`View history for ${label}`}
+      >
+        <span className="history__avatar" aria-hidden="true" title={entry.updatedBy}>
+          {initialOf(entry.updatedBy)}
+        </span>
+        <div className="history__content">{children}</div>
+      </Link>
+    );
+  }
+
+  return (
+    <div className="history__card-link history__card-link--static">
+      <span className="history__avatar" aria-hidden="true" title={entry.updatedBy}>
+        {initialOf(entry.updatedBy)}
+      </span>
+      <div className="history__content">{children}</div>
+    </div>
+  );
+};
+
 const HistoryList = ({
   entries = [],
   emptyMessage = 'No price changes yet.',
@@ -78,17 +98,12 @@ const HistoryList = ({
   return (
     <ul className="history__list">
       {entries.map((e) => {
+        const asin = String(e.asin ?? '').trim();
+
         if (e.type === 'snapshot' && e.snapshot) {
           return (
             <li key={e.id} className="history__item history__item--snapshot">
-              <span
-                className="history__avatar"
-                aria-hidden="true"
-                title={e.updatedBy}
-              >
-                {initialOf(e.updatedBy)}
-              </span>
-              <div className="history__content">
+              <HistoryItemShell entry={e} asin={asin}>
                 <div className="history__row">
                   <ProductIdentity entry={e} />
                   {typeof e.updateNumber === 'number' && (
@@ -103,7 +118,7 @@ const HistoryList = ({
                   </span>
                   <time className="history__time">{e.timestamp}</time>
                 </div>
-              </div>
+              </HistoryItemShell>
             </li>
           );
         }
@@ -116,14 +131,7 @@ const HistoryList = ({
 
         return (
           <li key={e.id} className="history__item">
-            <span
-              className="history__avatar"
-              aria-hidden="true"
-              title={e.updatedBy}
-            >
-              {initialOf(e.updatedBy)}
-            </span>
-            <div className="history__content">
+            <HistoryItemShell entry={e} asin={asin}>
               <div className="history__row">
                 <ProductIdentity entry={e} />
                 {typeof e.updateNumber === 'number' && (
@@ -155,7 +163,7 @@ const HistoryList = ({
                 </span>
                 <time className="history__time">{e.timestamp}</time>
               </div>
-            </div>
+            </HistoryItemShell>
           </li>
         );
       })}
