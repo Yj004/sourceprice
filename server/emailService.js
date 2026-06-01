@@ -8,33 +8,59 @@ const normalizeBrand = (brand) => {
   return lower;
 };
 
+/** Company owners — receive every Category Team Cost alert. */
+const ALWAYS_NOTIFY_EMAILS = [
+  'akshit.mittal@avaipl.com',
+  'anirudh.bansal@avaipl.com',
+];
+
+const dedupeEmails = (emails) => {
+  const seen = new Set();
+  return emails.filter((email) => {
+    const key = String(email).trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 /**
  * Category Team Cost alert recipients by brand.
  *
- * - Aromahpure → Parag Suri
- * - #N/A (missing brand) → Rohan Jain only
- * - Robustt + all other brands → Abhishek Ojha + Rohan Jain
+ * - Aromahpure → Parag Suri + owners
+ * - #N/A (missing brand) → Rohan Jain + owners
+ * - Robustt + all other brands → Abhishek Ojha + Rohan Jain + owners
  */
 export const getRecipientsForBrand = (brand) => {
   const norm = normalizeBrand(brand);
 
   if (norm === 'aromahpure') {
     return {
-      emails: ['parag.suri@avaipl.com'],
-      greeting: 'Parag',
+      emails: dedupeEmails([
+        'parag.suri@avaipl.com',
+        ...ALWAYS_NOTIFY_EMAILS,
+      ]),
+      greeting: 'Parag, Akshit, and Anirudh',
     };
   }
 
   if (norm === '#n/a') {
     return {
-      emails: ['rohan.jain@avaipl.com'],
-      greeting: 'Rohan',
+      emails: dedupeEmails([
+        'rohan.jain@avaipl.com',
+        ...ALWAYS_NOTIFY_EMAILS,
+      ]),
+      greeting: 'Rohan, Akshit, and Anirudh',
     };
   }
 
   return {
-    emails: ['Abhishek.Ojha@avaipl.com', 'rohan.jain@avaipl.com'],
-    greeting: 'Abhishek and Rohan',
+    emails: dedupeEmails([
+      'Abhishek.Ojha@avaipl.com',
+      'rohan.jain@avaipl.com',
+      ...ALWAYS_NOTIFY_EMAILS,
+    ]),
+    greeting: 'Abhishek, Rohan, Akshit, and Anirudh',
   };
 };
 
@@ -101,7 +127,7 @@ export const getEmailConfigStatus = () => {
     host,
     user,
     routing:
-      'Aromahpure→Parag · #N/A→Rohan · Others→Abhishek+Rohan',
+      'Every CTC change → Akshit + Anirudh · Aromahpure→Parag · #N/A→Rohan · Others→Abhishek+Rohan',
   };
 };
 
