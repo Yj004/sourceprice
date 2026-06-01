@@ -9,6 +9,8 @@
   flex-direction: column;
   gap: 10px;
   max-height: calc(100vh - 100px);
+  min-height: 0;
+  min-width: 0;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
@@ -17,6 +19,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .history__title {
@@ -47,15 +50,22 @@
 
 .history__list {
   margin: 0;
-  padding: 2px 2px 4px;
+  padding: 2px 4px 4px 2px;
   list-style: none;
+  overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .history__item {
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
@@ -111,13 +121,14 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .history__row {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .history__identity {
@@ -136,7 +147,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  width: fit-content;
   max-width: 100%;
   transition: color 0.15s;
 }
@@ -171,6 +181,7 @@
 }
 
 .history__badge {
+  flex-shrink: 0;
   font-size: 10px;
   font-weight: 600;
   background: rgba(99, 102, 241, 0.08);
@@ -182,6 +193,7 @@
 }
 
 .history__field {
+  align-self: flex-start;
   font-size: 10.5px;
   font-weight: 600;
   text-transform: uppercase;
@@ -191,7 +203,7 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 1px 7px;
-  max-width: 160px;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -199,13 +211,21 @@
 
 .history__delta {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 5px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  min-width: 0;
 }
+
+.history__delta-text {
+  min-width: 0;
+  line-height: 1.4;
+}
+
 .history__delta-arrow {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -222,19 +242,24 @@
 .history__meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   font-size: 11px;
   color: var(--muted);
 }
 
 .history__by {
-  max-width: 130px;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.history__time { font-variant-numeric: tabular-nums; }
+.history__time {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
 
 .history__snapshot-summary {
   display: flex;
@@ -266,9 +291,13 @@
   flex-direction: column;
   gap: 10px;
   padding: 6px 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .history__skel {
+  flex-shrink: 0;
   height: 88px;
   border-radius: 12px;
   border: 1px solid var(--border);
@@ -281,10 +310,92 @@
   100% { background-position: -200% 0; }
 }
 
+/* Tablet — history moves below table */
 @media (max-width: 1100px) {
   .history {
     position: static;
     max-height: none;
+    width: 100%;
   }
-  .history__list { max-height: 360px; }
+
+  .history__list {
+    max-height: min(420px, 52vh);
+  }
+
+  .history__skel-wrap {
+    max-height: min(420px, 52vh);
+  }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .history {
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+
+  .history__list {
+    max-height: min(360px, 48vh);
+    gap: 8px;
+    padding-right: 2px;
+  }
+
+  .history__skel-wrap {
+    max-height: min(360px, 48vh);
+  }
+
+  .history__card-link {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .history__avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+  }
+
+  .history__model {
+    white-space: normal;
+    word-break: break-word;
+    font-size: 12px;
+  }
+
+  .history__asin,
+  .history__product-meta {
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .history__row {
+    flex-wrap: wrap;
+  }
+
+  .history__delta {
+    flex-wrap: wrap;
+  }
+
+  .history__delta-text {
+    word-break: break-word;
+  }
+
+  .history__meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .history__by {
+    max-width: 100%;
+  }
+
+  .history__snapshot-summary {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 400px) {
+  .history__list {
+    max-height: min(320px, 42vh);
+  }
 }
