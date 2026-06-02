@@ -41,7 +41,7 @@ export const getRecipientsForBrand = (brand) => {
         'parag.suri@avaipl.com',
         ...ALWAYS_NOTIFY_EMAILS,
       ]),
-      greeting: 'Parag, Akshit, Anirudh, and Mukul',
+      greeting: 'team',
     };
   }
 
@@ -51,7 +51,7 @@ export const getRecipientsForBrand = (brand) => {
         'rohan.jain@avaipl.com',
         ...ALWAYS_NOTIFY_EMAILS,
       ]),
-      greeting: 'Rohan, Akshit, Anirudh, and Mukul',
+      greeting: 'team',
     };
   }
 
@@ -61,8 +61,22 @@ export const getRecipientsForBrand = (brand) => {
       'rohan.jain@avaipl.com',
       ...ALWAYS_NOTIFY_EMAILS,
     ]),
-    greeting: 'Abhishek, Rohan, Akshit, Anirudh, and Mukul',
+    greeting: 'team',
   };
+};
+
+/** Union recipients when a batch spans multiple brands. */
+export const getRecipientsForBatch = (items = []) => {
+  const emails = [];
+  for (const item of items) {
+    const { emails: brandEmails } = getRecipientsForBrand(item?.brand);
+    for (const email of brandEmails) {
+      if (!emails.some((e) => e.toLowerCase() === email.toLowerCase())) {
+        emails.push(email);
+      }
+    }
+  }
+  return { emails, greeting: 'team' };
 };
 
 const formatMoney = (value) => {
@@ -81,6 +95,12 @@ const escapeHtml = (value) =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+
+const formatItemLabel = (item) => {
+  const model = String(item.modelNo || item.asin || 'Product').trim();
+  const pack = String(item.packSize ?? '').trim();
+  return pack ? `${model} (Pack ${pack})` : model;
+};
 
 const getTransporter = () => {
   const host = String(process.env.SMTP_HOST || '').trim();
@@ -128,7 +148,7 @@ export const getEmailConfigStatus = () => {
     host,
     user,
     routing:
-      'Every CTC change → Akshit + Anirudh + Mukul · Aromahpure→Parag · #N/A→Rohan · Others→Abhishek+Rohan',
+      'CTC only · batch on multi-edit · Akshit+Anirudh+Mukul always · brand routing',
   };
 };
 
@@ -145,59 +165,28 @@ export const verifyEmailConnection = async () => {
   }
 };
 
-const buildEmailHtml = ({
-  product,
-  changes,
-  updatedBy,
-  timestamp,
-  totalChanged,
-  oldTotalCost,
-  newTotalCost,
-  greeting,
-}) => {
-  const ctcChange = changes.find((c) => c.key === 'categoryTeamCost');
-  const otherChanges = changes.filter((c) => c.key !== 'categoryTeamCost');
-
-  const changeRows = [
-    ...changes.map(
-      (c) => `
+const buildBatchEmailHtml = ({ items, updatedBy, timestamp, greeting }) => {
+  const rows = items
+    .map(
+      (item) => `
         <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;">
-            ${escapeHtml(c.label)}
+          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#334155;">
+            ${escapeHtml(formatItemLabel(item))}
           </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;">
-            ${escapeHtml(formatMoney(c.oldValue))}
-          </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">→</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#4338ca;">
-            ${escapeHtml(formatMoney(c.newValue))}
+          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:14px;font-weight:700;color:#4338ca;font-variant-numeric:tabular-nums;">
+            ${escapeHtml(formatMoney(item.oldValue))}
+            <span style="color:#94a3b8;font-weight:500;"> → </span>
+            ${escapeHtml(formatMoney(item.newValue))}
           </td>
         </tr>`,
-    ),
-    ...(totalChanged
-      ? [
-          `
-        <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;">
-            Total Cost (auto)
-          </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;">
-            ${escapeHtml(formatMoney(oldTotalCost))}
-          </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">→</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#4338ca;">
-            ${escapeHtml(formatMoney(newTotalCost))}
-          </td>
-        </tr>`,
-        ]
-      : []),
-  ].join('');
+    )
+    .join('');
 
   return `
 <!DOCTYPE html>
 <html>
   <body style="margin:0;padding:0;background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
-    <div style="max-width:640px;margin:24px auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+    <div style="max-width:560px;margin:24px auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
       <div style="padding:20px 24px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;">
         <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">
           SourcePrice Alert
@@ -211,152 +200,73 @@ const buildEmailHtml = ({
         <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">
           Hi ${escapeHtml(greeting)},
         </p>
-        <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#475569;">
-          A <strong>${escapeHtml(product.brand || '#N/A')}</strong> product had its
-          <strong>Category Team Cost</strong> updated. Full change details are below.
+        <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
+          <strong>CATAGORY TEAM COST</strong> was updated for
+          ${items.length === 1 ? 'this product' : `${items.length} products`}.
         </p>
 
-        <table style="width:100%;border-collapse:collapse;margin-bottom:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
-          <tr>
-            <td style="padding:10px 12px;font-size:12px;color:#64748b;width:140px;">ASIN</td>
-            <td style="padding:10px 12px;font-size:13px;font-weight:700;font-family:Consolas,monospace;">
-              ${escapeHtml(product.asin)}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:10px 12px;font-size:12px;color:#64748b;">Brand</td>
-            <td style="padding:10px 12px;font-size:13px;font-weight:600;">${escapeHtml(product.brand || '#N/A')}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px 12px;font-size:12px;color:#64748b;">Model No</td>
-            <td style="padding:10px 12px;font-size:13px;font-weight:600;font-family:Consolas,monospace;">
-              ${escapeHtml(product.modelNo)}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:10px 12px;font-size:12px;color:#64748b;">PLC</td>
-            <td style="padding:10px 12px;font-size:13px;">${escapeHtml(product.plc || '—')}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px 12px;font-size:12px;color:#64748b;">Pack size</td>
-            <td style="padding:10px 12px;font-size:13px;">${escapeHtml(product.packSize || '—')}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px 12px;font-size:12px;color:#64748b;">Updated by</td>
-            <td style="padding:10px 12px;font-size:13px;">${escapeHtml(updatedBy)}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px 12px;font-size:12px;color:#64748b;">Timestamp</td>
-            <td style="padding:10px 12px;font-size:13px;">${escapeHtml(timestamp)}</td>
-          </tr>
-        </table>
-
-        ${
-          ctcChange
-            ? `<div style="margin-bottom:16px;padding:12px 14px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);">
-          <div style="font-size:12px;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.05em;">
-            Category Team Cost
-          </div>
-          <div style="margin-top:6px;font-size:18px;font-weight:700;">
-            ${escapeHtml(formatMoney(ctcChange.oldValue))}
-            <span style="color:#94a3b8;font-weight:500;"> → </span>
-            ${escapeHtml(formatMoney(ctcChange.newValue))}
-          </div>
-        </div>`
-            : ''
-        }
-
-        <h2 style="margin:0 0 10px;font-size:14px;color:#334155;">
-          All changes in this save
-        </h2>
         <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
           <thead>
             <tr style="background:#f1f5f9;">
-              <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;">Field</th>
-              <th style="padding:8px 12px;text-align:right;font-size:11px;color:#64748b;">Old</th>
-              <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;"></th>
-              <th style="padding:8px 12px;text-align:right;font-size:11px;color:#64748b;">New</th>
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;">Product</th>
+              <th style="padding:8px 12px;text-align:right;font-size:11px;color:#64748b;">CATAGORY TEAM COST</th>
             </tr>
           </thead>
           <tbody>
-            ${changeRows || `<tr><td colspan="4" style="padding:12px;color:#64748b;">No field changes recorded.</td></tr>`}
+            ${rows}
           </tbody>
         </table>
 
-        ${
-          otherChanges.length > 0
-            ? `<p style="margin:16px 0 0;font-size:12px;color:#64748b;">
-          Other fields updated along with Category Team Cost:
-          ${escapeHtml(otherChanges.map((c) => c.label).join(', '))}.
-        </p>`
-            : ''
-        }
+        <p style="margin:16px 0 0;font-size:12px;color:#64748b;">
+          Updated by ${escapeHtml(updatedBy)} · ${escapeHtml(timestamp)}
+        </p>
       </div>
     </div>
   </body>
 </html>`;
 };
 
-const buildEmailText = ({
-  product,
-  changes,
-  updatedBy,
-  timestamp,
-  totalChanged,
-  oldTotalCost,
-  newTotalCost,
-  greeting,
-}) => {
+const buildBatchEmailText = ({ items, updatedBy, timestamp, greeting }) => {
   const lines = [
     `Hi ${greeting},`,
     '',
-    `Category Team Cost was updated for a ${product.brand || '#N/A'} product.`,
+    'CATAGORY TEAM COST updates:',
     '',
-    `ASIN: ${product.asin}`,
-    `Brand: ${product.brand || '#N/A'}`,
-    `Model No: ${product.modelNo}`,
-    `PLC: ${product.plc || '—'}`,
-    `Pack size: ${product.packSize || '—'}`,
-    `Updated by: ${updatedBy}`,
-    `Timestamp: ${timestamp}`,
-    '',
-    'Changes:',
-    ...changes.map(
-      (c) => `- ${c.label}: ${formatMoney(c.oldValue)} -> ${formatMoney(c.newValue)}`,
+    ...items.map(
+      (item) =>
+        `- ${formatItemLabel(item)}: ${formatMoney(item.oldValue)} -> ${formatMoney(item.newValue)}`,
     ),
+    '',
+    `Updated by: ${updatedBy}`,
+    `Time: ${timestamp}`,
   ];
-
-  if (totalChanged) {
-    lines.push(
-      `- Total Cost (auto): ${formatMoney(oldTotalCost)} -> ${formatMoney(newTotalCost)}`,
-    );
-  }
-
   return lines.join('\n');
 };
 
 /**
- * Send alert when Category Team Cost changes. Recipients depend on brand.
+ * Send one email with only Category Team Cost changes (single or batch).
  */
-export const notifyCategoryTeamCostChange = async ({
-  product,
-  changes = [],
-  updatedBy,
-  timestamp,
-  totalChanged = false,
-  oldTotalCost,
-  newTotalCost,
+export const notifyCategoryTeamCostBatch = async ({
+  items = [],
+  updatedBy = 'unknown',
+  timestamp = '',
 }) => {
   if (process.env.EMAIL_ENABLED === 'false') {
     return { ok: false, skipped: true, reason: 'disabled' };
   }
 
-  const ctcChanged = changes.some((c) => c.key === 'categoryTeamCost');
-  if (!ctcChanged) {
-    return { ok: false, skipped: true, reason: 'category_team_cost_unchanged' };
+  const clean = items.filter(
+    (item) =>
+      item &&
+      Number.isFinite(Number(item.oldValue)) &&
+      Number.isFinite(Number(item.newValue)),
+  );
+
+  if (!clean.length) {
+    return { ok: false, skipped: true, reason: 'no_items' };
   }
 
-  const { emails, greeting } = getRecipientsForBrand(product?.brand);
+  const { emails, greeting } = getRecipientsForBatch(clean);
   if (!emails.length) {
     return { ok: false, skipped: true, reason: 'no_recipients' };
   }
@@ -371,34 +281,54 @@ export const notifyCategoryTeamCostChange = async ({
 
   const from =
     process.env.EMAIL_FROM || process.env.SMTP_USER || 'sourceprice@avaipl.com';
-  const subject = `[SourcePrice] Category Team Cost updated — ${product.modelNo || product.asin} (${product.asin})`;
+  const countLabel = clean.length === 1 ? '1 product' : `${clean.length} products`;
+  const subject = `[SourcePrice] Category Team Cost updated — ${countLabel}`;
 
-  const payload = {
-    product,
-    changes,
-    updatedBy,
-    timestamp,
-    totalChanged,
-    oldTotalCost,
-    newTotalCost,
-    greeting,
-  };
+  const payload = { items: clean, updatedBy, timestamp, greeting };
 
   try {
     await transporter.sendMail({
       from,
       to: emails.join(', '),
       subject,
-      text: buildEmailText(payload),
-      html: buildEmailHtml(payload),
+      text: buildBatchEmailText(payload),
+      html: buildBatchEmailHtml(payload),
     });
 
     console.log(
-      `[email] Category Team Cost alert sent to ${emails.join(', ')} for ${product.asin} (${product.brand || '#N/A'})`,
+      `[email] Category Team Cost alert sent to ${emails.join(', ')} (${clean.length} product${clean.length === 1 ? '' : 's'})`,
     );
-    return { ok: true, to: emails };
+    return { ok: true, to: emails, count: clean.length };
   } catch (err) {
     console.error('[email] Failed to send Category Team Cost alert:', err);
     return { ok: false, error: err.message || 'Email send failed.' };
   }
+};
+
+/** Single-product save — delegates to batch helper. */
+export const notifyCategoryTeamCostChange = async ({
+  product,
+  changes = [],
+  updatedBy,
+  timestamp,
+}) => {
+  const ctc = changes.find((c) => c.key === 'categoryTeamCost');
+  if (!ctc) {
+    return { ok: false, skipped: true, reason: 'category_team_cost_unchanged' };
+  }
+
+  return notifyCategoryTeamCostBatch({
+    items: [
+      {
+        asin: product?.asin,
+        brand: product?.brand,
+        modelNo: product?.modelNo,
+        packSize: product?.packSize,
+        oldValue: ctc.oldValue,
+        newValue: ctc.newValue,
+      },
+    ],
+    updatedBy,
+    timestamp,
+  });
 };

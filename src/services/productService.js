@@ -11,8 +11,8 @@ export const updateProductPrice = async ({ id, newPrice, updatedBy }) => {
   return result;
 };
 
-export const updateProduct = async ({ id, updates, updatedBy }) => {
-  const result = await api.updateProduct(id, updates, updatedBy);
+export const updateProduct = async ({ id, updates, updatedBy, suppressEmail = false }) => {
+  const result = await api.updateProduct(id, updates, updatedBy, { suppressEmail });
   return result;
 };
 
@@ -23,6 +23,8 @@ export const INITIAL_FILTERS = {
   search: '',
   brand: '',
   plc: '',
+  /** '' | 'notupdated' | 'updated' — Category Team Cost history */
+  ctcStatus: '',
 };
 
 const norm = (v) => String(v ?? '').trim().toLowerCase();
@@ -41,19 +43,44 @@ const readSearch = (filters) => norm(filters.search ?? filters.q);
 /**
  * Intersection filter — brand (exact), plc (exact), search (substring).
  */
+const matchesCtcStatus = (p, ctcStatus) => {
+  if (!ctcStatus) return true;
+  if (ctcStatus === 'notupdated') return !p.ctcEverUpdated;
+  if (ctcStatus === 'updated') return Boolean(p.ctcEverUpdated);
+  return true;
+};
+
 export const filterProducts = (products, filters = {}) => {
   const search = readSearch(filters);
   const plc = norm(filters.plc);
   const brand = norm(filters.brand);
+  const ctcStatus = norm(filters.ctcStatus);
 
-  if (!search && !plc && !brand) return products;
+  if (!search && !plc && !brand && !ctcStatus) return products;
 
   return products.filter((p) => {
     if (brand && norm(p.brand) !== brand) return false;
     if (plc && norm(p.plc) !== plc) return false;
     if (search && !matchesSearch(p, search)) return false;
+    if (!matchesCtcStatus(p, ctcStatus)) return false;
     return true;
   });
+};
+
+/** Count products per CTC status for the filter dropdown (respects other filters). */
+export const getCtcStatusCounts = (products, filters = {}) => {
+  const base = filterProducts(products, { ...filters, ctcStatus: '' });
+  let notUpdated = 0;
+  let updated = 0;
+  for (const p of base) {
+    if (p.ctcEverUpdated) updated += 1;
+    else notUpdated += 1;
+  }
+  return {
+    all: base.length,
+    notupdated: notUpdated,
+    updated,
+  };
 };
 
 /**

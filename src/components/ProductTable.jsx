@@ -81,6 +81,7 @@ const ProductTable = ({
   selectedAsins,
   onToggleSelect,
   onToggleSelectAll,
+  onClearSelection,
   loading = false,
   error = null,
   savingId = null,
@@ -199,7 +200,7 @@ const ProductTable = ({
           <button
             type="button"
             className="ptable__bulk-clear"
-            onClick={() => onToggleSelectAll?.(true)}
+            onClick={() => (onClearSelection ? onClearSelection() : onToggleSelectAll?.(true))}
           >
             Clear
           </button>

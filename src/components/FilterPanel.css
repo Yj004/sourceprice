@@ -189,7 +189,7 @@
 
 .fbar__dropdowns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
 }
@@ -605,10 +605,12 @@
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       'plc    brand'
+      'ctc    ctc'
       'reset  reset';
   }
   .fbar__dropdowns > .fbar__dd:nth-child(1) { grid-area: plc; }
   .fbar__dropdowns > .fbar__dd:nth-child(2) { grid-area: brand; }
+  .fbar__dropdowns > .fbar__dd:nth-child(3) { grid-area: ctc; }
   .fbar__dropdowns > .fbar__reset { grid-area: reset; width: 100%; justify-content: center; }
 
   .fbar__dd-panel {
@@ -623,6 +625,7 @@
     grid-template-areas:
       'plc'
       'brand'
+      'ctc'
       'reset';
   }
 

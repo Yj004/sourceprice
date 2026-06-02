@@ -7,7 +7,7 @@ import {
   updateProduct,
   updateProductPrice,
 } from './sheetsClient.js';
-import { notifyCategoryTeamCostChange } from './emailService.js';
+import { notifyCategoryTeamCostBatch, notifyCategoryTeamCostChange } from './emailService.js';
 import {
   createUser,
   deleteUser,
@@ -159,7 +159,7 @@ export const createApp = () => {
   app.patch('/api/products/:asin', requireAuth, async (req, res) => {
     try {
       const { asin } = req.params;
-      const { updates, updatedBy } = req.body || {};
+      const { updates, updatedBy, suppressEmail } = req.body || {};
       if (!updates || typeof updates !== 'object') {
         res.status(400).json({ ok: false, error: 'No updates provided.' });
         return;
@@ -177,16 +177,13 @@ export const createApp = () => {
       const ctcChanged = (result.changes || []).some(
         (c) => c.key === 'categoryTeamCost',
       );
-      if (ctcChanged) {
+      if (ctcChanged && !suppressEmail) {
         try {
           await notifyCategoryTeamCostChange({
             product: result.product,
             changes: result.changes.map((c) => ({ ...c })),
             updatedBy: result.updatedBy,
             timestamp: result.timestamp,
-            totalChanged: result.totalChanged,
-            oldTotalCost: result.oldTotalCost,
-            newTotalCost: result.newTotalCost,
           });
         } catch (err) {
           console.error('Category Team Cost email notification failed:', err);
@@ -197,6 +194,32 @@ export const createApp = () => {
     } catch (e) {
       console.error('PATCH /api/products/:asin', e);
       res.status(500).json({ ok: false, error: e.message || 'Update failed.' });
+    }
+  });
+
+  app.post('/api/notifications/category-team-cost', requireAuth, async (req, res) => {
+    try {
+      const { items, updatedBy, timestamp } = req.body || {};
+      if (!Array.isArray(items) || items.length === 0) {
+        res.status(400).json({ ok: false, error: 'No Category Team Cost changes provided.' });
+        return;
+      }
+
+      const result = await notifyCategoryTeamCostBatch({
+        items,
+        updatedBy: updatedBy || req.user.email,
+        timestamp: timestamp || new Date().toLocaleString('en-IN'),
+      });
+
+      if (!result.ok && !result.skipped) {
+        res.status(500).json(result);
+        return;
+      }
+
+      res.json(result);
+    } catch (e) {
+      console.error('POST /api/notifications/category-team-cost', e);
+      res.status(500).json({ ok: false, error: e.message || 'Notification failed.' });
     }
   });
 

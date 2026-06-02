@@ -145,13 +145,14 @@ export const ProductProvider = ({ children }) => {
    * appends multiple rows in one save and assigns the canonical timestamps.
    */
   const saveProductEdit = useCallback(
-    async (id, updates) => {
+    async (id, updates, options = {}) => {
       setSavingId(id);
       try {
         const result = await svcUpdateProduct({
           id,
           updates,
           updatedBy: user?.email || 'unknown',
+          suppressEmail: Boolean(options.suppressEmail),
         });
         if (!result.ok) {
           showToast(result.error || 'Update failed.', 'error');
@@ -176,7 +177,12 @@ export const ProductProvider = ({ children }) => {
             : `Saved · ${result.product.asin}`;
         showToast(summary, 'success');
 
-        return { ok: true, product: result.product };
+        return {
+          ok: true,
+          product: result.product,
+          changes: result.changes || [],
+          timestamp: result.timestamp,
+        };
       } catch (e) {
         const msg = e?.message || 'Update failed.';
         showToast(msg, 'error');

@@ -77,10 +77,19 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ newPrice, updatedBy }),
     }),
-  updateProduct: (asin, updates, updatedBy) =>
+  updateProduct: (asin, updates, updatedBy, options = {}) =>
     request(`/products/${encodeURIComponent(asin)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ updates, updatedBy }),
+      body: JSON.stringify({
+        updates,
+        updatedBy,
+        suppressEmail: Boolean(options.suppressEmail),
+      }),
+    }),
+  notifyCategoryTeamCostBatch: (payload) =>
+    request('/notifications/category-team-cost', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 
   getUsers: () => request('/users'),

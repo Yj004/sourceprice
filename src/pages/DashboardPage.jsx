@@ -6,7 +6,8 @@
  * dummy data or localStorage directly.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import api from '../services/apiClient.js';
 import Navbar from '../components/Navbar.jsx';
 import FilterPanel from '../components/FilterPanel.jsx';
 import ProductTable from '../components/ProductTable.jsx';
@@ -22,9 +23,11 @@ import {
   filterProducts,
   getAvailableBrands,
   getAvailablePlcs,
+  getCtcStatusCounts,
   INITIAL_FILTERS,
 } from '../services/productService.js';
 import { attachUpdateCounts, countEditSessions } from '../utils/countUpdates.js';
+import { attachCtcUpdateStatus } from '../utils/ctcUpdateStatus.js';
 import { groupBySession } from '../utils/historyGrouping.js';
 import { isSameLocalDay, parseTimestamp } from '../utils/format.js';
 import './DashboardPage.css';
@@ -47,12 +50,14 @@ const DashboardPage = () => {
   const [searchInput, setSearchInput] = useState(INITIAL_FILTERS.search);
   const [brand, setBrand] = useState(INITIAL_FILTERS.brand);
   const [plc, setPlc] = useState(INITIAL_FILTERS.plc);
+  const [ctcStatus, setCtcStatus] = useState(INITIAL_FILTERS.ctcStatus);
   const debouncedSearch = useDebounce(searchInput, 200);
 
   const [editingAsin, setEditingAsin] = useState(null);
   const [editQueue, setEditQueue] = useState([]);
   const [selectedAsins, setSelectedAsins] = useState(() => new Set());
   const [showMyUpdates, setShowMyUpdates] = useState(false);
+  const bulkCtcPendingRef = useRef([]);
   const [statsTime, setStatsTime] = useState(() => Date.now());
 
   const filters = useMemo(
@@ -60,8 +65,9 @@ const DashboardPage = () => {
       search: debouncedSearch,
       brand,
       plc,
+      ctcStatus,
     }),
-    [debouncedSearch, brand, plc],
+    [debouncedSearch, brand, plc, ctcStatus],
   );
 
   const instantFilters = useMemo(
@@ -69,16 +75,17 @@ const DashboardPage = () => {
       search: searchInput,
       brand,
       plc,
+      ctcStatus,
     }),
-    [searchInput, brand, plc],
+    [searchInput, brand, plc, ctcStatus],
   );
 
   const currentEmail = String(user?.email || '').trim().toLowerCase();
 
-  const productsWithCounts = useMemo(
-    () => attachUpdateCounts(products, history),
-    [products, history],
-  );
+  const productsWithCounts = useMemo(() => {
+    const withSessions = attachUpdateCounts(products, history);
+    return attachCtcUpdateStatus(withSessions, history);
+  }, [products, history]);
 
   const visibleProducts = useMemo(
     () => filterProducts(productsWithCounts, filters),
@@ -102,6 +109,11 @@ const DashboardPage = () => {
 
   const brandCounts = useMemo(
     () => buildOptionCounts(productsWithCounts, instantFilters, 'brand'),
+    [productsWithCounts, instantFilters],
+  );
+
+  const ctcStatusCounts = useMemo(
+    () => getCtcStatusCounts(productsWithCounts, instantFilters),
     [productsWithCounts, instantFilters],
   );
 
@@ -170,6 +182,7 @@ const DashboardPage = () => {
     setSearchInput(INITIAL_FILTERS.search);
     setBrand(INITIAL_FILTERS.brand);
     setPlc(INITIAL_FILTERS.plc);
+    setCtcStatus(INITIAL_FILTERS.ctcStatus);
   }, []);
 
   const myTodayHistory = useMemo(() => {
@@ -248,7 +261,38 @@ const DashboardPage = () => {
     [visibleProducts],
   );
 
+  const flushBulkCtcEmail = useCallback(async () => {
+    const items = bulkCtcPendingRef.current;
+    bulkCtcPendingRef.current = [];
+    if (!items.length) return;
+
+    try {
+      await api.notifyCategoryTeamCostBatch({
+        items,
+        updatedBy: user?.email || 'unknown',
+        timestamp: new Date().toLocaleString('en-IN'),
+      });
+    } catch (err) {
+      console.error('Bulk Category Team Cost email failed:', err);
+    }
+  }, [user?.email]);
+
+  const collectBulkCtcChange = useCallback((result, product) => {
+    const ctc = (result.changes || []).find((c) => c.key === 'categoryTeamCost');
+    if (!ctc) return;
+
+    bulkCtcPendingRef.current.push({
+      asin: result.product?.asin || product.asin,
+      brand: result.product?.brand || product.brand,
+      modelNo: result.product?.modelNo || product.modelNo,
+      packSize: result.product?.packSize || product.packSize,
+      oldValue: ctc.oldValue,
+      newValue: ctc.newValue,
+    });
+  }, []);
+
   const handleSingleEdit = useCallback((product) => {
+    bulkCtcPendingRef.current = [];
     setEditQueue([]);
     setEditingAsin(product.asin);
   }, []);
@@ -258,6 +302,7 @@ const DashboardPage = () => {
       .filter((p) => selectedAsins.has(p.asin))
       .map((p) => p.asin);
     if (queue.length < 2) return;
+    bulkCtcPendingRef.current = [];
     setEditQueue(queue);
     setEditingAsin(queue[0]);
   }, [visibleProducts, selectedAsins]);
@@ -269,14 +314,23 @@ const DashboardPage = () => {
       setEditingAsin(nextAsin);
       return;
     }
+    void flushBulkCtcEmail();
     setEditingAsin(null);
     setEditQueue([]);
-  }, [editQueue, editingAsin]);
+  }, [editQueue, editingAsin, flushBulkCtcEmail]);
 
   const handleCloseEdit = useCallback(() => {
+    void flushBulkCtcEmail();
     setEditingAsin(null);
     setEditQueue([]);
-  }, []);
+  }, [flushBulkCtcEmail]);
+
+  const handleClearSelection = useCallback(() => {
+    void flushBulkCtcEmail();
+    setEditingAsin(null);
+    setEditQueue([]);
+    setSelectedAsins(new Set());
+  }, [flushBulkCtcEmail]);
 
   const handleEditSave = useCallback(
     async (updates) => {
@@ -284,10 +338,14 @@ const DashboardPage = () => {
         return { ok: false, error: 'No product selected.' };
       }
 
-      const result = await saveProductEdit(editingProduct.id, updates);
+      const inBulk = editQueue.length > 0;
+      const result = await saveProductEdit(editingProduct.id, updates, {
+        suppressEmail: inBulk,
+      });
       if (!result?.ok) return result;
 
-      if (editQueue.length > 0) {
+      if (inBulk) {
+        collectBulkCtcChange(result, editingProduct);
         const idx = editQueue.indexOf(editingAsin);
         const nextAsin = idx >= 0 ? editQueue[idx + 1] : null;
         if (nextAsin) {
@@ -296,13 +354,21 @@ const DashboardPage = () => {
         }
         setEditQueue([]);
         setEditingAsin(null);
+        await flushBulkCtcEmail();
         return { ok: true, product: result.product };
       }
 
       setEditingAsin(null);
       return { ok: true, product: result.product };
     },
-    [editQueue, editingAsin, editingProduct, saveProductEdit],
+    [
+      editQueue,
+      editingAsin,
+      editingProduct,
+      saveProductEdit,
+      collectBulkCtcChange,
+      flushBulkCtcEmail,
+    ],
   );
 
   return (
@@ -348,14 +414,17 @@ const DashboardPage = () => {
               onSearchInputChange={setSearchInput}
               brand={brand}
               plc={plc}
+              ctcStatus={ctcStatus}
               onBrandChange={handleBrandChange}
               onPlcChange={handlePlcChange}
+              onCtcStatusChange={setCtcStatus}
               onPickProduct={handlePickProduct}
               onReset={handleResetFilters}
               availablePlcs={availablePlcs}
               availableBrands={availableBrands}
               plcCounts={plcCounts}
               brandCounts={brandCounts}
+              ctcStatusCounts={ctcStatusCounts}
               listProducts={searchListProducts}
               resultCount={visibleProducts.length}
               totalCount={products.length}
@@ -367,6 +436,7 @@ const DashboardPage = () => {
               selectedAsins={selectedAsins}
               onToggleSelect={handleToggleSelect}
               onToggleSelectAll={handleToggleSelectAll}
+              onClearSelection={handleClearSelection}
               loading={loading}
               error={error}
               savingId={savingId}

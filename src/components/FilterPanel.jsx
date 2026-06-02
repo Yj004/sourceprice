@@ -44,6 +44,8 @@ const ChevronIcon = ({ open }) => (
   </svg>
 );
 
+import { CTC_STATUS_LABELS, CTC_STATUS_OPTIONS } from '../utils/ctcUpdateStatus.js';
+
 const formatOptionLabel = (value, count) => {
   if (count == null) return value;
   return `${value} (${count.toLocaleString('en-IN')})`;
@@ -224,6 +226,9 @@ const FilterDropdown = ({
   onChange,
   placeholder,
   allLabel,
+  searchable = true,
+  getOptionLabel,
+  allCount: allCountProp,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -258,14 +263,16 @@ const FilterDropdown = ({
 
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
-    const t = setTimeout(() => searchRef.current?.focus(), 30);
+    const t = searchable
+      ? setTimeout(() => searchRef.current?.focus(), 30)
+      : undefined;
 
     return () => {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
-      clearTimeout(t);
+      if (t) clearTimeout(t);
     };
-  }, [open]);
+  }, [open, searchable]);
 
   const pick = (opt) => {
     onChange(opt);
@@ -280,7 +287,8 @@ const FilterDropdown = ({
     });
   };
 
-  const allCount = options.length;
+  const allCount = allCountProp ?? options.length;
+  const labelFor = (opt) => (getOptionLabel ? getOptionLabel(opt) : opt);
 
   return (
     <div
@@ -302,8 +310,8 @@ const FilterDropdown = ({
       >
         <span className={`fbar__dd-value ${!hasValue ? 'fbar__dd-value--placeholder' : ''}`}>
           {hasValue
-            ? formatOptionLabel(selected, optionCounts?.get(selected))
-            : `${placeholder} (${allCount})`}
+            ? formatOptionLabel(labelFor(selected), optionCounts?.get(selected))
+            : `${placeholder} (${allCount.toLocaleString('en-IN')})`}
         </span>
         <ChevronIcon open={open} />
       </button>
@@ -328,21 +336,23 @@ const FilterDropdown = ({
             </span>
           </div>
 
-          <div className="fbar__dd-search-wrap">
-            <span className="fbar__dd-search-icon" aria-hidden>
-              <SearchIcon />
-            </span>
-            <input
-              ref={searchRef}
-              type="search"
-              className="fbar__dd-search"
-              placeholder={`Search ${label.toLowerCase()}…`}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoComplete="off"
-              aria-label={`Search within ${label}`}
-            />
-          </div>
+          {searchable && (
+            <div className="fbar__dd-search-wrap">
+              <span className="fbar__dd-search-icon" aria-hidden>
+                <SearchIcon />
+              </span>
+              <input
+                ref={searchRef}
+                type="search"
+                className="fbar__dd-search"
+                placeholder={`Search ${label.toLowerCase()}…`}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                autoComplete="off"
+                aria-label={`Search within ${label}`}
+              />
+            </div>
+          )}
 
           <ul
             id={listId}
@@ -358,7 +368,7 @@ const FilterDropdown = ({
                 className={`fbar__dd-option fbar__dd-option--all ${!hasValue ? 'fbar__dd-option--selected' : ''}`}
                 onClick={() => pick('')}
               >
-                {allLabel} ({allCount})
+                {allLabel} ({allCount.toLocaleString('en-IN')})
               </button>
             </li>
             {filtered.length === 0 ? (
@@ -375,7 +385,7 @@ const FilterDropdown = ({
                     className={`fbar__dd-option ${selected === opt ? 'fbar__dd-option--selected' : ''}`}
                     onClick={() => pick(opt)}
                   >
-                    {formatOptionLabel(opt, optionCounts?.get(opt))}
+                    {formatOptionLabel(labelFor(opt), optionCounts?.get(opt))}
                   </button>
                 </li>
               ))
@@ -392,21 +402,36 @@ const FilterPanel = ({
   onSearchInputChange,
   brand,
   plc,
+  ctcStatus,
   onBrandChange,
   onPlcChange,
+  onCtcStatusChange,
   onPickProduct,
   onReset,
   availablePlcs = [],
   availableBrands = [],
   plcCounts,
   brandCounts,
+  ctcStatusCounts,
   listProducts = [],
   resultCount,
   totalCount,
 }) => {
   const activeCount =
-    (searchInput?.trim() ? 1 : 0) + (plc ? 1 : 0) + (brand ? 1 : 0);
+    (searchInput?.trim() ? 1 : 0) +
+    (plc ? 1 : 0) +
+    (brand ? 1 : 0) +
+    (ctcStatus ? 1 : 0);
   const hasAny = activeCount > 0;
+
+  const ctcOptionCounts = useMemo(
+    () =>
+      new Map([
+        ['notupdated', ctcStatusCounts?.notupdated ?? 0],
+        ['updated', ctcStatusCounts?.updated ?? 0],
+      ]),
+    [ctcStatusCounts],
+  );
 
   return (
     <section className="fbar" aria-label="Filter products">
@@ -450,6 +475,18 @@ const FilterPanel = ({
           onChange={onBrandChange}
           placeholder="All brands"
           allLabel="All brands"
+        />
+        <FilterDropdown
+          label="CTC status"
+          value={ctcStatus}
+          options={CTC_STATUS_OPTIONS}
+          optionCounts={ctcOptionCounts}
+          onChange={onCtcStatusChange}
+          placeholder="All CTC status"
+          allLabel="All CTC status"
+          searchable={false}
+          getOptionLabel={(opt) => CTC_STATUS_LABELS[opt] || opt}
+          allCount={ctcStatusCounts?.all ?? 0}
         />
 
         <button
