@@ -40,6 +40,7 @@ const DashboardPage = () => {
   const {
     products,
     history,
+    ctcUpdatedAsins,
     loading,
     error,
     savingId,
@@ -84,8 +85,8 @@ const DashboardPage = () => {
 
   const productsWithCounts = useMemo(() => {
     const withSessions = attachUpdateCounts(products, history);
-    return attachCtcUpdateStatus(withSessions, history);
-  }, [products, history]);
+    return attachCtcUpdateStatus(withSessions, history, ctcUpdatedAsins);
+  }, [products, history, ctcUpdatedAsins]);
 
   const visibleProducts = useMemo(
     () => filterProducts(productsWithCounts, filters),
@@ -297,15 +298,60 @@ const DashboardPage = () => {
     setEditingAsin(product.asin);
   }, []);
 
+  const buildSelectionQueue = useCallback(
+    (orderSource) =>
+      orderSource
+        .filter((p) => selectedAsins.has(p.asin))
+        .map((p) => p.asin),
+    [selectedAsins],
+  );
+
+  const startEditQueue = useCallback(
+    (orderSource) => {
+      const queue = buildSelectionQueue(orderSource);
+      if (queue.length === 0) return;
+
+      bulkCtcPendingRef.current = [];
+
+      if (queue.length === 1) {
+        setEditQueue([]);
+        setEditingAsin(queue[0]);
+        return;
+      }
+
+      setEditQueue(queue);
+      setEditingAsin(queue[0]);
+    },
+    [buildSelectionQueue],
+  );
+
   const handleStartBulkEdit = useCallback(() => {
-    const queue = visibleProducts
-      .filter((p) => selectedAsins.has(p.asin))
-      .map((p) => p.asin);
+    const queue = buildSelectionQueue(visibleProducts);
     if (queue.length < 2) return;
-    bulkCtcPendingRef.current = [];
-    setEditQueue(queue);
-    setEditingAsin(queue[0]);
-  }, [visibleProducts, selectedAsins]);
+    startEditQueue(visibleProducts);
+  }, [visibleProducts, buildSelectionQueue, startEditQueue]);
+
+  const handleStartBulkEditFromSearch = useCallback(() => {
+    startEditQueue(searchListProducts);
+  }, [searchListProducts, startEditQueue]);
+
+  const handleEditSelectedFromSearch = useCallback(() => {
+    startEditQueue(searchListProducts);
+  }, [searchListProducts, startEditQueue]);
+
+  const handleToggleSelectAllInSearchList = useCallback(() => {
+    setSelectedAsins((prev) => {
+      const asins = searchListProducts.map((p) => p.asin);
+      const allSelected =
+        asins.length > 0 && asins.every((asin) => prev.has(asin));
+      if (allSelected) {
+        const next = new Set(prev);
+        asins.forEach((asin) => next.delete(asin));
+        return next;
+      }
+      return new Set([...prev, ...asins]);
+    });
+  }, [searchListProducts]);
 
   const advanceBulkEdit = useCallback(() => {
     const idx = editQueue.indexOf(editingAsin);
@@ -419,6 +465,11 @@ const DashboardPage = () => {
               onPlcChange={handlePlcChange}
               onCtcStatusChange={setCtcStatus}
               onPickProduct={handlePickProduct}
+              selectedAsins={selectedAsins}
+              onToggleSelect={handleToggleSelect}
+              onToggleSelectAllInList={handleToggleSelectAllInSearchList}
+              onStartBulkEdit={handleStartBulkEditFromSearch}
+              onEditSelected={handleEditSelectedFromSearch}
               onReset={handleResetFilters}
               availablePlcs={availablePlcs}
               availableBrands={availableBrands}

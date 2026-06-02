@@ -4,6 +4,7 @@ import {
   ensureSheetTab,
   getValues,
 } from './sheetsApi.js';
+import { buildCtcUpdateCountByAsin } from './ctcUpdateStatus.js';
 
 const TABS = {
   MAIN: 'Main_Data',
@@ -65,8 +66,8 @@ const COL_LETTERS = {
 };
 
 /**
- * Price_History mirrors Main_Data + Timestamp (A) + Updated_By (V).
- * One row per popup save — full snapshot after the edit.
+ * Price_History — one row per popup save (full snapshot + metadata).
+ * A=Timestamp … V=Updated_By, W=Changed_Fields (comma-separated keys, e.g. categoryTeamCost).
  */
 export const HISTORY_HEADERS = [
   'Timestamp',
@@ -91,6 +92,7 @@ export const HISTORY_HEADERS = [
   'Total Cost',
   'CATAGORY TEAM COST',
   'Updated_By',
+  'Changed_Fields',
 ];
 
 const HISTORY_COLS = {
@@ -116,9 +118,42 @@ const HISTORY_COLS = {
   TOTAL_COST: 19,
   CATEGORY_TEAM_COST: 20,
   UPDATED_BY: 21,
+  CHANGED_FIELDS: 22,
 };
 
-const HISTORY_RANGE = `${TABS.HISTORY}!A2:V`;
+const HISTORY_HEADER_RANGE = `${TABS.HISTORY}!A1:W1`;
+const HISTORY_RANGE = `${TABS.HISTORY}!A2:W`;
+
+let historyReadyPromise = null;
+
+/**
+ * Ensure Price_History tab exists and row 1 has all headers (incl. Changed_Fields).
+ */
+export const ensureHistorySheetReady = () => {
+  if (!historyReadyPromise) {
+    historyReadyPromise = bootstrapHistorySheet();
+  }
+  return historyReadyPromise;
+};
+
+const bootstrapHistorySheet = async () => {
+  await ensureSheetTab(TABS.HISTORY);
+
+  const headerRows = await getValues(HISTORY_HEADER_RANGE);
+  const current = headerRows[0] || [];
+  const needsFullHeader =
+    current.length < HISTORY_HEADERS.length ||
+    String(current[HISTORY_COLS.CHANGED_FIELDS] || '').trim() !== 'Changed_Fields';
+
+  if (needsFullHeader) {
+    await batchUpdateValues([
+      { range: HISTORY_HEADER_RANGE, values: [HISTORY_HEADERS] },
+    ]);
+    console.log(
+      `[sheets] Price_History headers updated (${HISTORY_HEADERS.length} columns, incl. Changed_Fields)`,
+    );
+  }
+};
 
 const EDITABLE_FIELDS = [
   { key: 'sourcePrice', col: COLS.SOURCE_PRICE, label: 'source_price_ex_gst', composeTotal: true },
@@ -348,7 +383,7 @@ const rowToSnapshot = (row) => ({
   categoryTeamCost: parseNumber(row[HISTORY_COLS.CATEGORY_TEAM_COST]),
 });
 
-const productToHistoryRow = (product, timestamp, updatedBy) => [
+const productToHistoryRow = (product, timestamp, updatedBy, changedFieldKeys = []) => [
   asSheetTextTimestamp(timestamp),
   product.asin,
   product.sourcePrice,
@@ -371,6 +406,7 @@ const productToHistoryRow = (product, timestamp, updatedBy) => [
   product.totalCost,
   product.categoryTeamCost,
   updatedBy,
+  changedFieldKeys.join(','),
 ];
 
 const parseLegacyHistoryRow = (row, idx, asinSeq) => {
@@ -425,6 +461,11 @@ const parseSnapshotHistoryRow = (row, idx, asinSeq) => {
   const updateNumber = (asinSeq.get(asin) || 0) + 1;
   asinSeq.set(asin, updateNumber);
 
+  const changedFieldsRaw = String(row[HISTORY_COLS.CHANGED_FIELDS] || '').trim();
+  const changedFields = changedFieldsRaw
+    ? changedFieldsRaw.split(',').map((s) => s.trim()).filter(Boolean)
+    : undefined;
+
   return {
     id: `hist-${idx}-${asin}`,
     type: 'snapshot',
@@ -436,6 +477,7 @@ const parseSnapshotHistoryRow = (row, idx, asinSeq) => {
     updatedBy,
     updateNumber,
     snapshot,
+    changedFields,
     field: 'Edit record',
     oldPrice: snapshot.sourcePrice,
     newPrice: snapshot.sourcePrice,
@@ -453,18 +495,35 @@ const parseHistoryRow = (row, idx, asinSeq) => {
   return null;
 };
 
+const parseHistoryEntries = (historyRows) => {
+  const asinSeq = new Map();
+  return historyRows
+    .map((row, idx) => parseHistoryRow(row, idx, asinSeq))
+    .filter(Boolean);
+};
+
 export const fetchProducts = async () => {
+  invalidateMainAsinRowCache();
+  await ensureHistorySheetReady();
   const [mainRows, historyRows] = await Promise.all([
     getValues(`${TABS.MAIN}!A2:T`),
     getValues(HISTORY_RANGE),
   ]);
 
   const updateCounts = countUpdatesByAsin(historyRows);
+  const historyEntries = parseHistoryEntries(historyRows);
+  const ctcCounts = buildCtcUpdateCountByAsin(historyEntries);
 
   const products = [];
   mainRows.forEach((row, i) => {
     const product = rowToProduct(row, i + 2, updateCounts);
-    if (product) products.push(product);
+    if (!product) return;
+    const ctcUpdateCount = ctcCounts.get(product.asin) || 0;
+    products.push({
+      ...product,
+      ctcUpdateCount,
+      ctcEverUpdated: ctcUpdateCount > 0,
+    });
   });
 
   return products;
@@ -484,6 +543,7 @@ const buildRcmLookup = (updateRows) => {
 };
 
 export const fetchHistory = async () => {
+  await ensureHistorySheetReady();
   const [historyRows, updateRows] = await Promise.all([
     getValues(HISTORY_RANGE),
     getValues(`${TABS.UPDATE}!A2:G`),
@@ -512,37 +572,35 @@ export const fetchHistory = async () => {
   return entries;
 };
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Cache ASIN → sheet row to avoid scanning column A on every save. */
+let mainAsinRowCache = null;
+
+const invalidateMainAsinRowCache = () => {
+  mainAsinRowCache = null;
+};
+
+const getMainAsinRowMap = async () => {
+  if (mainAsinRowCache) return mainAsinRowCache;
+
+  const colA = await getValues(`${TABS.MAIN}!A:A`);
+  const map = new Map();
+  colA.forEach((row, i) => {
+    const asin = String(row[0] || '').trim();
+    if (!asin || asin === 'ASIN' || i < 1) return;
+    map.set(asin, i + 1);
+  });
+  mainAsinRowCache = map;
+  return map;
+};
 
 const findMainDataProduct = async (asin) => {
-  const colA = await getValues(`${TABS.MAIN}!A:A`);
-  const rowIndex = colA.findIndex((r) => String(r[0] || '').trim() === asin);
-  if (rowIndex < 1) return null;
+  const key = String(asin || '').trim();
+  const sheetRow = (await getMainAsinRowMap()).get(key);
+  if (!sheetRow) return null;
 
-  const sheetRow = rowIndex + 1;
   const row = await getValues(`${TABS.MAIN}!A${sheetRow}:T${sheetRow}`);
   const cells = row[0] || [];
   return rowToProduct(cells, sheetRow, new Map());
-};
-
-/**
- * Read product row twice with a short gap so Google Sheets values settle.
- * Stale reads caused emails one save behind and duplicate CTC alerts.
- */
-const findMainDataProductStable = async (asin) => {
-  const first = await findMainDataProduct(asin);
-  if (!first) return null;
-
-  await sleep(120);
-  const second = await findMainDataProduct(asin);
-  if (!second) return first;
-
-  for (const f of EDITABLE_FIELDS) {
-    if (round2(first[f.key]) !== round2(second[f.key])) {
-      return second;
-    }
-  }
-  return first;
 };
 
 /** Canonical post-save product — use written values, not a possibly stale re-read. */
@@ -573,7 +631,7 @@ const mapChangesForClient = (changed) =>
   }));
 
 export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' }) => {
-  const product = await findMainDataProductStable(asin);
+  const product = await findMainDataProduct(asin);
   if (!product) {
     return { ok: false, error: 'Product not found.' };
   }
@@ -621,33 +679,35 @@ export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' 
     });
   }
 
-  await batchUpdateValues(data);
-
   const now = new Date();
   const timestamp = formatHistoryTimestamp(now);
   const merged = applyUpdatesToProduct(product, next, newTotalCost);
   const clientChanges = mapChangesForClient(changed);
+  const changedFieldKeys = changed.map((c) => c.field.key);
+  const nextTotalUpdates = (product.totalUpdates || 0) + 1;
 
   const priceChange = changed.find((c) => c.field.key === 'sourcePrice');
-  if (priceChange) {
-    await appendPriceUpdate({
-      asin,
-      brand: product.brand,
-      modelNo: product.modelNo,
-      updatedBy,
-      oldPrice: priceChange.oldValue,
-      newPrice: priceChange.newValue,
-      date: now,
-    });
-  }
 
-  await appendValues(`${TABS.HISTORY}!A:V`, [
-    productToHistoryRow(merged, timestamp, updatedBy),
+  await batchUpdateValues(data);
+
+  await Promise.all([
+    appendValues(`${TABS.HISTORY}!A:W`, [
+      productToHistoryRow(merged, timestamp, updatedBy, changedFieldKeys),
+    ]),
+    priceChange
+      ? appendPriceUpdate({
+          asin,
+          brand: product.brand,
+          modelNo: product.modelNo,
+          updatedBy,
+          oldPrice: priceChange.oldValue,
+          newPrice: priceChange.newValue,
+          date: now,
+        })
+      : Promise.resolve(),
   ]);
 
-  const allHistoryRows = await getValues(HISTORY_RANGE);
-  const counts = countUpdatesByAsin(allHistoryRows);
-  const updated = { ...merged, totalUpdates: counts.get(asin) || 0 };
+  const updated = { ...merged, totalUpdates: nextTotalUpdates };
 
   const entry = {
     id: `h-${Date.now()}-${asin}`,
@@ -655,7 +715,7 @@ export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' 
     asin,
     timestamp,
     updatedBy,
-    updateNumber: updated.totalUpdates,
+    updateNumber: nextTotalUpdates,
     snapshot: {
       sourcePrice: merged.sourcePrice,
       gst: merged.gst,
@@ -680,7 +740,7 @@ export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' 
     field: 'Edit record',
     oldPrice: priceChange ? priceChange.oldValue : merged.sourcePrice,
     newPrice: merged.sourcePrice,
-    changedFields: changed.map((c) => c.field.key),
+    changedFields: changedFieldKeys,
   };
 
   return {

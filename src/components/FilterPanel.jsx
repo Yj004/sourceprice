@@ -56,6 +56,11 @@ const SearchProductPicker = ({
   onSearchInputChange,
   listProducts,
   onPickProduct,
+  selectedAsins,
+  onToggleSelect,
+  onToggleSelectAllInList,
+  onStartBulkEdit,
+  onEditSelected,
   brand,
   plc,
   resultCount,
@@ -65,10 +70,25 @@ const SearchProductPicker = ({
   const inputRef = useRef(null);
   const listId = useId();
 
+  const selectedSet = useMemo(
+    () => selectedAsins ?? new Set(),
+    [selectedAsins],
+  );
   const q = String(searchInput || '').trim();
   const hasValue = q.length > 0;
   const hasDropdownFilter = Boolean(brand) || Boolean(plc);
   const showSuggestions = q.length >= 2 || hasDropdownFilter;
+
+  const selectedInList = useMemo(
+    () => listProducts.filter((p) => selectedSet.has(p.asin)).length,
+    [listProducts, selectedSet],
+  );
+
+  const allInListSelected =
+    listProducts.length > 0 &&
+    listProducts.every((p) => selectedSet.has(p.asin));
+  const someInListSelected =
+    selectedInList > 0 && !allInListSelected;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -96,6 +116,16 @@ const SearchProductPicker = ({
     onPickProduct?.(p);
     setOpen(false);
     inputRef.current?.blur();
+  };
+
+  const handleEditSelected = () => {
+    onEditSelected?.();
+    setOpen(false);
+  };
+
+  const handleBulkEdit = () => {
+    onStartBulkEdit?.();
+    setOpen(false);
   };
 
   const placeholder = hasDropdownFilter
@@ -179,39 +209,102 @@ const SearchProductPicker = ({
             </p>
           )}
 
+          {listProducts.length > 0 && (
+            <div className="fbar__search-select-bar">
+              <label className="fbar__search-select-all">
+                <input
+                  type="checkbox"
+                  checked={allInListSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someInListSelected;
+                  }}
+                  onChange={() => onToggleSelectAllInList?.()}
+                  aria-label="Select all products in this list"
+                />
+                <span>Select all in results</span>
+              </label>
+              {selectedInList > 0 && (
+                <span className="fbar__search-select-count">
+                  <strong>{selectedInList}</strong> selected
+                </span>
+              )}
+            </div>
+          )}
+
           <ul id={listId} className="fbar__dd-list fbar__dd-list--products" role="listbox">
             {listProducts.length === 0 ? (
               <li className="fbar__dd-empty" role="presentation">
                 No products match your filters.
               </li>
             ) : (
-              listProducts.map((p) => (
-                <li key={p.asin} role="presentation">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={q === p.asin}
-                    className={`fbar__product-option ${q === p.asin ? 'fbar__product-option--selected' : ''}`}
-                    onClick={() => pickProduct(p)}
-                  >
-                    <span className="fbar__product-meta">
-                      {p.brand || '—'} · {p.modelNo || '—'}
-                    </span>
-                    <span className="fbar__product-tags">
-                      {p.plc && (
-                        <span className="fbar__product-tag fbar__product-tag--plc">
-                          {p.plc}
+              listProducts.map((p) => {
+                const isChecked = selectedSet.has(p.asin);
+                const isFilterMatch = q.length >= 2 && q === p.asin;
+                return (
+                  <li key={p.asin} role="presentation">
+                    <div
+                      className={`fbar__product-row ${isChecked ? 'fbar__product-row--checked' : ''} ${isFilterMatch ? 'fbar__product-row--filter-match' : ''}`}
+                    >
+                      <label
+                        className="fbar__product-check"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => onToggleSelect?.(p.asin)}
+                          aria-label={`Select ${p.modelNo || p.asin}`}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={isFilterMatch}
+                        className="fbar__product-option"
+                        onClick={() => pickProduct(p)}
+                      >
+                        <span className="fbar__product-meta">
+                          {p.brand || '—'} · {p.modelNo || '—'}
                         </span>
-                      )}
-                      <span className="fbar__product-tag">
-                        Pack {p.packSize || '—'}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))
+                        <span className="fbar__product-tags">
+                          {p.plc && (
+                            <span className="fbar__product-tag fbar__product-tag--plc">
+                              {p.plc}
+                            </span>
+                          )}
+                          <span className="fbar__product-tag">
+                            Pack {p.packSize || '—'}
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  </li>
+                );
+              })
             )}
           </ul>
+
+          {selectedInList > 0 && (
+            <div className="fbar__search-actions">
+              {selectedInList >= 2 ? (
+                <button
+                  type="button"
+                  className="fbar__search-edit-btn"
+                  onClick={handleBulkEdit}
+                >
+                  Edit selected ({selectedInList})
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="fbar__search-edit-btn"
+                  onClick={handleEditSelected}
+                >
+                  Edit selected
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -407,6 +500,11 @@ const FilterPanel = ({
   onPlcChange,
   onCtcStatusChange,
   onPickProduct,
+  selectedAsins,
+  onToggleSelect,
+  onToggleSelectAllInList,
+  onStartBulkEdit,
+  onEditSelected,
   onReset,
   availablePlcs = [],
   availableBrands = [],
@@ -451,6 +549,11 @@ const FilterPanel = ({
           onSearchInputChange={onSearchInputChange}
           listProducts={listProducts}
           onPickProduct={onPickProduct}
+          selectedAsins={selectedAsins}
+          onToggleSelect={onToggleSelect}
+          onToggleSelectAllInList={onToggleSelectAllInList}
+          onStartBulkEdit={onStartBulkEdit}
+          onEditSelected={onEditSelected}
           brand={brand}
           plc={plc}
           resultCount={resultCount ?? 0}

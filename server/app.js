@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import { requireAuth, requireSuperAdmin, signToken } from './auth.js';
 import {
+  ensureHistorySheetReady,
   fetchHistory,
   fetchProducts,
   updateProduct,
@@ -16,14 +17,23 @@ import {
   loginUser,
 } from './usersService.js';
 
-const origins = (process.env.BACKEND_CORS_ORIGINS || 'http://localhost:5173')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
+const getCorsOrigins = () => {
+  const list = (process.env.BACKEND_CORS_ORIGINS || 'http://localhost:5173')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  for (const key of ['VERCEL_URL', 'VERCEL_BRANCH_URL']) {
+    const host = process.env[key];
+    if (host) list.push(`https://${host}`);
+  }
+
+  return [...new Set(list)];
+};
 
 export const createApp = () => {
   const app = express();
-  app.use(cors({ origin: origins }));
+  app.use(cors({ origin: getCorsOrigins() }));
   app.use(express.json());
 
   app.get('/api/health', async (_req, res) => {
@@ -178,16 +188,14 @@ export const createApp = () => {
         (c) => c.key === 'categoryTeamCost',
       );
       if (ctcChanged && !suppressEmail) {
-        try {
-          await notifyCategoryTeamCostChange({
-            product: result.product,
-            changes: result.changes.map((c) => ({ ...c })),
-            updatedBy: result.updatedBy,
-            timestamp: result.timestamp,
-          });
-        } catch (err) {
+        notifyCategoryTeamCostChange({
+          product: result.product,
+          changes: result.changes.map((c) => ({ ...c })),
+          updatedBy: result.updatedBy,
+          timestamp: result.timestamp,
+        }).catch((err) => {
           console.error('Category Team Cost email notification failed:', err);
-        }
+        });
       }
 
       res.json(result);
@@ -227,7 +235,7 @@ export const createApp = () => {
 };
 
 export const initApp = async () => {
-  await ensureUsersReady();
+  await Promise.all([ensureUsersReady(), ensureHistorySheetReady()]);
   return createApp();
 };
 

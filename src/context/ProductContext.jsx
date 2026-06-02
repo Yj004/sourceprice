@@ -36,6 +36,7 @@ import {
   addHistoryRecord,
 } from '../services/historyService.js';
 import { formatPrice, formatTimestamp } from '../utils/format.js';
+import { getCtcUpdatedAsinSet } from '../utils/ctcUpdateStatus.js';
 import { useAuth } from './useAuth.js';
 import { useToast } from './useToast.js';
 
@@ -50,6 +51,7 @@ export const ProductProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [savingId, setSavingId] = useState(null);
+  const [ctcUpdatedAsins, setCtcUpdatedAsins] = useState(() => new Set());
 
   const loadAll = useCallback(async () => {
     if (!user?.token) return;
@@ -59,6 +61,7 @@ export const ProductProvider = ({ children }) => {
       const [p, h] = await Promise.all([getAllProducts(), getHistory()]);
       setProducts(p);
       setHistory(h);
+      setCtcUpdatedAsins(getCtcUpdatedAsinSet(h));
     } catch (e) {
       setError(e?.message || 'Failed to load data.');
     } finally {
@@ -70,6 +73,7 @@ export const ProductProvider = ({ children }) => {
     if (!user?.token) {
       setProducts([]);
       setHistory([]);
+      setCtcUpdatedAsins(new Set());
       setError(null);
       setLoading(false);
       return;
@@ -159,15 +163,42 @@ export const ProductProvider = ({ children }) => {
           return result;
         }
 
+        const asin = result.product?.asin || id;
+        const changedFields = result.changedFields || [];
+        const ctcChanged =
+          changedFields.includes('categoryTeamCost') ||
+          (result.changes || []).some((c) => c.key === 'categoryTeamCost');
+
         setProducts((prev) =>
-          prev.map((p) => (p.id === id ? { ...p, ...result.product } : p)),
+          prev.map((p) =>
+            p.id === id
+              ? {
+                  ...p,
+                  ...result.product,
+                  ...(ctcChanged
+                    ? {
+                        ctcEverUpdated: true,
+                        ctcUpdateCount: Math.max(
+                          p.ctcUpdateCount || 0,
+                          result.product?.ctcUpdateCount || 1,
+                        ),
+                      }
+                    : {}),
+                }
+              : p,
+          ),
         );
 
-        try {
-          const fresh = await getHistory();
-          setHistory(fresh);
-        } catch {
-          // History reload is best-effort; the product update already succeeded.
+        if (result.entry) {
+          setHistory((prev) => {
+            const next = [result.entry, ...prev];
+            queueMicrotask(() =>
+              setCtcUpdatedAsins(getCtcUpdatedAsinSet(next)),
+            );
+            return next;
+          });
+        } else if (ctcChanged) {
+          setCtcUpdatedAsins((s) => new Set(s).add(asin));
         }
 
         const changedCount = (result.changedFields || []).length;
@@ -198,6 +229,7 @@ export const ProductProvider = ({ children }) => {
     () => ({
       products,
       history,
+      ctcUpdatedAsins,
       loading,
       error,
       savingId,
@@ -208,6 +240,7 @@ export const ProductProvider = ({ children }) => {
     [
       products,
       history,
+      ctcUpdatedAsins,
       loading,
       error,
       savingId,

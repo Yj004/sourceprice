@@ -1,6 +1,5 @@
 /**
- * Category Team Cost (CTC) update status from Price_History.
- * "Updated" = CTC changed in at least one edit session.
+ * Category Team Cost update detection (server-side, mirrors client utils).
  */
 
 const CTC_FIELD_RE = /catagory\s*team\s*cost|category\s*team\s*cost/i;
@@ -13,9 +12,6 @@ const isCtcFieldLabel = (field) => CTC_FIELD_RE.test(String(field || ''));
 const sessionKey = (asin, timestamp) =>
   `${String(asin || '').trim()}|${String(timestamp || '').trim()}`;
 
-/**
- * Collect distinct edit sessions where CTC changed, per ASIN.
- */
 export const buildCtcUpdateSessionsByAsin = (history = []) => {
   const sessions = new Map();
 
@@ -75,48 +71,3 @@ export const buildCtcUpdateCountByAsin = (history = []) => {
   }
   return counts;
 };
-
-/** ASINs that have had CTC updated at least once. */
-export const getCtcUpdatedAsinSet = (history = []) =>
-  new Set(buildCtcUpdateSessionsByAsin(history).keys());
-
-export const attachCtcUpdateStatus = (
-  products,
-  history,
-  liveUpdatedAsins = new Set(),
-) => {
-  const counts = buildCtcUpdateCountByAsin(history);
-  return products.map((p) => {
-    const fromHistory = counts.get(p.asin) || 0;
-    const live = liveUpdatedAsins.has(p.asin);
-    const fromApi = Boolean(p.ctcEverUpdated);
-    const ctcEverUpdated = fromHistory > 0 || live || fromApi;
-    const ctcUpdateCount = Math.max(
-      fromHistory,
-      p.ctcUpdateCount || 0,
-      live ? 1 : 0,
-    );
-    return {
-      ...p,
-      ctcUpdateCount,
-      ctcEverUpdated,
-    };
-  });
-};
-
-export const CTC_STATUS = {
-  ALL: '',
-  NOT_UPDATED: 'notupdated',
-  UPDATED: 'updated',
-};
-
-export const CTC_STATUS_LABELS = {
-  [CTC_STATUS.ALL]: 'All',
-  [CTC_STATUS.NOT_UPDATED]: 'Not updated',
-  [CTC_STATUS.UPDATED]: 'Updated',
-};
-
-export const CTC_STATUS_OPTIONS = [
-  CTC_STATUS.NOT_UPDATED,
-  CTC_STATUS.UPDATED,
-];
