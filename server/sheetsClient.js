@@ -512,6 +512,8 @@ export const fetchHistory = async () => {
   return entries;
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const findMainDataProduct = async (asin) => {
   const colA = await getValues(`${TABS.MAIN}!A:A`);
   const rowIndex = colA.findIndex((r) => String(r[0] || '').trim() === asin);
@@ -523,8 +525,55 @@ const findMainDataProduct = async (asin) => {
   return rowToProduct(cells, sheetRow, new Map());
 };
 
+/**
+ * Read product row twice with a short gap so Google Sheets values settle.
+ * Stale reads caused emails one save behind and duplicate CTC alerts.
+ */
+const findMainDataProductStable = async (asin) => {
+  const first = await findMainDataProduct(asin);
+  if (!first) return null;
+
+  await sleep(120);
+  const second = await findMainDataProduct(asin);
+  if (!second) return first;
+
+  for (const f of EDITABLE_FIELDS) {
+    if (round2(first[f.key]) !== round2(second[f.key])) {
+      return second;
+    }
+  }
+  return first;
+};
+
+/** Canonical post-save product — use written values, not a possibly stale re-read. */
+const applyUpdatesToProduct = (product, next, newTotalCost) => ({
+  ...product,
+  sourcePrice: next.sourcePrice,
+  currentPrice: next.sourcePrice,
+  warehouse: next.warehouse,
+  transport: next.transport,
+  label: next.label,
+  labour: next.labour,
+  poly: next.poly,
+  pouch: next.pouch,
+  box: next.box,
+  masterCartoon: next.masterCartoon,
+  manualsPamphlets: next.manualsPamphlets,
+  otherCost: next.otherCost,
+  categoryTeamCost: next.categoryTeamCost,
+  totalCost: newTotalCost,
+});
+
+const mapChangesForClient = (changed) =>
+  changed.map((c) => ({
+    key: c.field.key,
+    label: c.field.label,
+    oldValue: c.oldValue,
+    newValue: c.newValue,
+  }));
+
 export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' }) => {
-  const product = await findMainDataProduct(asin);
+  const product = await findMainDataProductStable(asin);
   if (!product) {
     return { ok: false, error: 'Product not found.' };
   }
@@ -576,6 +625,8 @@ export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' 
 
   const now = new Date();
   const timestamp = formatHistoryTimestamp(now);
+  const merged = applyUpdatesToProduct(product, next, newTotalCost);
+  const clientChanges = mapChangesForClient(changed);
 
   const priceChange = changed.find((c) => c.field.key === 'sourcePrice');
   if (priceChange) {
@@ -590,15 +641,13 @@ export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' 
     });
   }
 
-  const fresh = await findMainDataProduct(asin);
-
   await appendValues(`${TABS.HISTORY}!A:V`, [
-    productToHistoryRow(fresh, timestamp, updatedBy),
+    productToHistoryRow(merged, timestamp, updatedBy),
   ]);
 
   const allHistoryRows = await getValues(HISTORY_RANGE);
   const counts = countUpdatesByAsin(allHistoryRows);
-  const updated = { ...fresh, totalUpdates: counts.get(asin) || 0 };
+  const updated = { ...merged, totalUpdates: counts.get(asin) || 0 };
 
   const entry = {
     id: `h-${Date.now()}-${asin}`,
@@ -608,29 +657,29 @@ export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' 
     updatedBy,
     updateNumber: updated.totalUpdates,
     snapshot: {
-      sourcePrice: fresh.sourcePrice,
-      gst: fresh.gst,
-      modelNo: fresh.modelNo,
-      plc: fresh.plc,
-      masterCategory: fresh.masterCategory,
-      brand: fresh.brand,
-      packSize: fresh.packSize,
-      warehouse: fresh.warehouse,
-      transport: fresh.transport,
-      label: fresh.label,
-      labour: fresh.labour,
-      poly: fresh.poly,
-      pouch: fresh.pouch,
-      box: fresh.box,
-      masterCartoon: fresh.masterCartoon,
-      manualsPamphlets: fresh.manualsPamphlets,
-      otherCost: fresh.otherCost,
-      totalCost: fresh.totalCost,
-      categoryTeamCost: fresh.categoryTeamCost,
+      sourcePrice: merged.sourcePrice,
+      gst: merged.gst,
+      modelNo: merged.modelNo,
+      plc: merged.plc,
+      masterCategory: merged.masterCategory,
+      brand: merged.brand,
+      packSize: merged.packSize,
+      warehouse: merged.warehouse,
+      transport: merged.transport,
+      label: merged.label,
+      labour: merged.labour,
+      poly: merged.poly,
+      pouch: merged.pouch,
+      box: merged.box,
+      masterCartoon: merged.masterCartoon,
+      manualsPamphlets: merged.manualsPamphlets,
+      otherCost: merged.otherCost,
+      totalCost: merged.totalCost,
+      categoryTeamCost: merged.categoryTeamCost,
     },
     field: 'Edit record',
-    oldPrice: priceChange ? priceChange.oldValue : fresh.sourcePrice,
-    newPrice: fresh.sourcePrice,
+    oldPrice: priceChange ? priceChange.oldValue : merged.sourcePrice,
+    newPrice: merged.sourcePrice,
     changedFields: changed.map((c) => c.field.key),
   };
 
@@ -640,12 +689,7 @@ export const updateProduct = async ({ asin, updates = {}, updatedBy = 'unknown' 
     oldPrice: priceChange ? priceChange.oldValue : product.sourcePrice,
     entry,
     changedFields: changed.map((c) => c.field.key),
-    changes: changed.map((c) => ({
-      key: c.field.key,
-      label: c.field.label,
-      oldValue: c.oldValue,
-      newValue: c.newValue,
-    })),
+    changes: clientChanges,
     totalChanged,
     oldTotalCost: prevTotalCostStored,
     newTotalCost,

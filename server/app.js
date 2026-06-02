@@ -174,17 +174,24 @@ export const createApp = () => {
         return;
       }
 
-      notifyCategoryTeamCostChange({
-        product: result.product,
-        changes: result.changes,
-        updatedBy: result.updatedBy,
-        timestamp: result.timestamp,
-        totalChanged: result.totalChanged,
-        oldTotalCost: result.oldTotalCost,
-        newTotalCost: result.newTotalCost,
-      }).catch((err) => {
-        console.error('Category Team Cost email notification failed:', err);
-      });
+      const ctcChanged = (result.changes || []).some(
+        (c) => c.key === 'categoryTeamCost',
+      );
+      if (ctcChanged) {
+        try {
+          await notifyCategoryTeamCostChange({
+            product: result.product,
+            changes: result.changes.map((c) => ({ ...c })),
+            updatedBy: result.updatedBy,
+            timestamp: result.timestamp,
+            totalChanged: result.totalChanged,
+            oldTotalCost: result.oldTotalCost,
+            newTotalCost: result.newTotalCost,
+          });
+        } catch (err) {
+          console.error('Category Team Cost email notification failed:', err);
+        }
+      }
 
       res.json(result);
     } catch (e) {

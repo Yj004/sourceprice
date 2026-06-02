@@ -212,6 +212,9 @@ const EditProductModal = ({
 
     const result = await onSave?.(dirtyFields);
     if (result?.ok) {
+      if (result.product) {
+        setDraft(buildInitialDraft(result.product));
+      }
       if (!result.keepOpen) {
         onClose?.();
       }

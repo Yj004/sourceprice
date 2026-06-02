@@ -292,15 +292,15 @@ const DashboardPage = () => {
         const nextAsin = idx >= 0 ? editQueue[idx + 1] : null;
         if (nextAsin) {
           setEditingAsin(nextAsin);
-          return { ok: true, keepOpen: true };
+          return { ok: true, keepOpen: true, product: result.product };
         }
         setEditQueue([]);
         setEditingAsin(null);
-        return { ok: true };
+        return { ok: true, product: result.product };
       }
 
       setEditingAsin(null);
-      return { ok: true };
+      return { ok: true, product: result.product };
     },
     [editQueue, editingAsin, editingProduct, saveProductEdit],
   );

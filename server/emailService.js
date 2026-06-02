@@ -12,6 +12,7 @@ const normalizeBrand = (brand) => {
 const ALWAYS_NOTIFY_EMAILS = [
   'akshit.mittal@avaipl.com',
   'anirudh.bansal@avaipl.com',
+  'mukul.bansal@avaipl.com',
 ];
 
 const dedupeEmails = (emails) => {
@@ -40,7 +41,7 @@ export const getRecipientsForBrand = (brand) => {
         'parag.suri@avaipl.com',
         ...ALWAYS_NOTIFY_EMAILS,
       ]),
-      greeting: 'Parag, Akshit, and Anirudh',
+      greeting: 'Parag, Akshit, Anirudh, and Mukul',
     };
   }
 
@@ -50,7 +51,7 @@ export const getRecipientsForBrand = (brand) => {
         'rohan.jain@avaipl.com',
         ...ALWAYS_NOTIFY_EMAILS,
       ]),
-      greeting: 'Rohan, Akshit, and Anirudh',
+      greeting: 'Rohan, Akshit, Anirudh, and Mukul',
     };
   }
 
@@ -60,7 +61,7 @@ export const getRecipientsForBrand = (brand) => {
       'rohan.jain@avaipl.com',
       ...ALWAYS_NOTIFY_EMAILS,
     ]),
-    greeting: 'Abhishek, Rohan, Akshit, and Anirudh',
+    greeting: 'Abhishek, Rohan, Akshit, Anirudh, and Mukul',
   };
 };
 
@@ -127,7 +128,7 @@ export const getEmailConfigStatus = () => {
     host,
     user,
     routing:
-      'Every CTC change → Akshit + Anirudh · Aromahpure→Parag · #N/A→Rohan · Others→Abhishek+Rohan',
+      'Every CTC change → Akshit + Anirudh + Mukul · Aromahpure→Parag · #N/A→Rohan · Others→Abhishek+Rohan',
   };
 };
 
