@@ -5,7 +5,7 @@ import 'dotenv/config';
 import {
   getEmailConfigStatus,
   getRecipientsForBrand,
-  notifyCategoryTeamCostChange,
+  notifyProductChanges,
   verifyEmailConnection,
 } from '../emailService.js';
 
@@ -29,7 +29,7 @@ console.log(`\nBrand "${testBrand}" → ${recipients.emails.join(', ')}\n`);
 
 console.log('SMTP connection OK. Sending test alert...\n');
 
-const result = await notifyCategoryTeamCostChange({
+const result = await notifyProductChanges({
   product: {
     asin: 'B0TEST12345',
     brand: testBrand,

@@ -208,11 +208,21 @@ export const ProductProvider = ({ children }) => {
             : `Saved · ${result.product.asin}`;
         showToast(summary, 'success');
 
+        const email = result.email;
+        if (email?.ok) {
+          showToast('Email alert sent to the team', 'success');
+        } else if (email && !email.skipped && email.error) {
+          showToast(`Saved, but email failed: ${email.error}`, 'error');
+        } else if (email?.skipped && email.reason === 'smtp_not_configured') {
+          showToast('Saved — SMTP not configured (no email sent)', 'error');
+        }
+
         return {
           ok: true,
           product: result.product,
           changes: result.changes || [],
           timestamp: result.timestamp,
+          email,
         };
       } catch (e) {
         const msg = e?.message || 'Update failed.';

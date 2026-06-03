@@ -58,7 +58,7 @@ const DashboardPage = () => {
   const [editQueue, setEditQueue] = useState([]);
   const [selectedAsins, setSelectedAsins] = useState(() => new Set());
   const [showMyUpdates, setShowMyUpdates] = useState(false);
-  const bulkCtcPendingRef = useRef([]);
+  const bulkEmailPendingRef = useRef([]);
   const [statsTime, setStatsTime] = useState(() => Date.now());
 
   const filters = useMemo(
@@ -262,38 +262,43 @@ const DashboardPage = () => {
     [visibleProducts],
   );
 
-  const flushBulkCtcEmail = useCallback(async () => {
-    const items = bulkCtcPendingRef.current;
-    bulkCtcPendingRef.current = [];
+  const flushBulkEmail = useCallback(async () => {
+    const items = bulkEmailPendingRef.current;
+    bulkEmailPendingRef.current = [];
     if (!items.length) return;
 
     try {
-      await api.notifyCategoryTeamCostBatch({
+      const emailResult = await api.notifyCategoryTeamCostBatch({
         items,
         updatedBy: user?.email || 'unknown',
         timestamp: new Date().toLocaleString('en-IN'),
       });
+      if (emailResult?.ok) return emailResult;
+      if (emailResult && !emailResult.skipped) {
+        console.error('Bulk email failed:', emailResult.error || emailResult);
+      }
+      return emailResult;
     } catch (err) {
-      console.error('Bulk Category Team Cost email failed:', err);
+      console.error('Bulk product update email failed:', err);
+      return { ok: false, error: err.message };
     }
   }, [user?.email]);
 
-  const collectBulkCtcChange = useCallback((result, product) => {
-    const ctc = (result.changes || []).find((c) => c.key === 'categoryTeamCost');
-    if (!ctc) return;
+  const collectBulkEmailChange = useCallback((result, product) => {
+    const changes = result.changes || [];
+    if (!changes.length) return;
 
-    bulkCtcPendingRef.current.push({
+    bulkEmailPendingRef.current.push({
       asin: result.product?.asin || product.asin,
       brand: result.product?.brand || product.brand,
       modelNo: result.product?.modelNo || product.modelNo,
       packSize: result.product?.packSize || product.packSize,
-      oldValue: ctc.oldValue,
-      newValue: ctc.newValue,
+      changes,
     });
   }, []);
 
   const handleSingleEdit = useCallback((product) => {
-    bulkCtcPendingRef.current = [];
+    bulkEmailPendingRef.current = [];
     setEditQueue([]);
     setEditingAsin(product.asin);
   }, []);
@@ -311,7 +316,7 @@ const DashboardPage = () => {
       const queue = buildSelectionQueue(orderSource);
       if (queue.length === 0) return;
 
-      bulkCtcPendingRef.current = [];
+      bulkEmailPendingRef.current = [];
 
       if (queue.length === 1) {
         setEditQueue([]);
@@ -360,23 +365,23 @@ const DashboardPage = () => {
       setEditingAsin(nextAsin);
       return;
     }
-    void flushBulkCtcEmail();
+    void flushBulkEmail();
     setEditingAsin(null);
     setEditQueue([]);
-  }, [editQueue, editingAsin, flushBulkCtcEmail]);
+  }, [editQueue, editingAsin, flushBulkEmail]);
 
   const handleCloseEdit = useCallback(() => {
-    void flushBulkCtcEmail();
+    void flushBulkEmail();
     setEditingAsin(null);
     setEditQueue([]);
-  }, [flushBulkCtcEmail]);
+  }, [flushBulkEmail]);
 
   const handleClearSelection = useCallback(() => {
-    void flushBulkCtcEmail();
+    void flushBulkEmail();
     setEditingAsin(null);
     setEditQueue([]);
     setSelectedAsins(new Set());
-  }, [flushBulkCtcEmail]);
+  }, [flushBulkEmail]);
 
   const handleEditSave = useCallback(
     async (updates) => {
@@ -391,7 +396,7 @@ const DashboardPage = () => {
       if (!result?.ok) return result;
 
       if (inBulk) {
-        collectBulkCtcChange(result, editingProduct);
+        collectBulkEmailChange(result, editingProduct);
         const idx = editQueue.indexOf(editingAsin);
         const nextAsin = idx >= 0 ? editQueue[idx + 1] : null;
         if (nextAsin) {
@@ -400,20 +405,20 @@ const DashboardPage = () => {
         }
         setEditQueue([]);
         setEditingAsin(null);
-        await flushBulkCtcEmail();
-        return { ok: true, product: result.product };
+        const emailResult = await flushBulkEmail();
+        return { ok: true, product: result.product, email: emailResult };
       }
 
       setEditingAsin(null);
-      return { ok: true, product: result.product };
+      return { ok: true, product: result.product, email: result.email };
     },
     [
       editQueue,
       editingAsin,
       editingProduct,
       saveProductEdit,
-      collectBulkCtcChange,
-      flushBulkCtcEmail,
+      collectBulkEmailChange,
+      flushBulkEmail,
     ],
   );
 

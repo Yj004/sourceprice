@@ -1,4 +1,11 @@
+import { randomUUID } from 'crypto';
 import nodemailer from 'nodemailer';
+
+/** Strip quotes/whitespace from .env values (common copy-paste mistake). */
+const stripEnv = (value) =>
+  String(value ?? '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '');
 
 /** Normalize brand for routing (#N/A, empty → #n/a). */
 const normalizeBrand = (brand) => {
@@ -8,7 +15,7 @@ const normalizeBrand = (brand) => {
   return lower;
 };
 
-/** Company owners — receive every Category Team Cost alert. */
+/** Company owners — receive every product update alert. */
 const ALWAYS_NOTIFY_EMAILS = [
   'akshit.mittal@avaipl.com',
   'anirudh.bansal@avaipl.com',
@@ -26,7 +33,7 @@ const dedupeEmails = (emails) => {
 };
 
 /**
- * Category Team Cost alert recipients by brand.
+ * Product update alert recipients by brand.
  *
  * - Aromahpure → Parag Suri + owners
  * - #N/A (missing brand) → Rohan Jain + owners
@@ -65,8 +72,8 @@ export const getRecipientsForBrand = (brand) => {
   };
 };
 
-/** Union recipients when a batch spans multiple brands. */
-export const getRecipientsForBatch = (items = []) => {
+/** Union recipients when a batch spans multiple brands; optionally CC the editor. */
+export const getRecipientsForBatch = (items = [], updatedBy = '') => {
   const emails = [];
   for (const item of items) {
     const { emails: brandEmails } = getRecipientsForBrand(item?.brand);
@@ -76,7 +83,17 @@ export const getRecipientsForBatch = (items = []) => {
       }
     }
   }
-  return { emails, greeting: 'team' };
+
+  const editor = stripEnv(updatedBy).toLowerCase();
+  if (
+    editor.includes('@') &&
+    process.env.EMAIL_CC_UPDATER !== 'false' &&
+    !emails.some((e) => e.toLowerCase() === editor)
+  ) {
+    emails.push(editor);
+  }
+
+  return { emails: dedupeEmails(emails), greeting: 'team' };
 };
 
 const formatMoney = (value) => {
@@ -87,6 +104,20 @@ const formatMoney = (value) => {
     currency: 'INR',
     maximumFractionDigits: 2,
   }).format(n);
+};
+
+const MONEY_PATTERN =
+  /price|cost|warehouse|transport|label|labour|poly|pouch|box|cartoon|manual|other/i;
+
+const formatFieldValue = (value, field) => {
+  const n = Number(value);
+  if (Number.isFinite(n) && MONEY_PATTERN.test(String(field || ''))) {
+    return formatMoney(n);
+  }
+  if (Number.isFinite(n)) {
+    return new Intl.NumberFormat('en-IN').format(n);
+  }
+  return String(value ?? '—');
 };
 
 const escapeHtml = (value) =>
@@ -102,10 +133,144 @@ const formatItemLabel = (item) => {
   return pack ? `${model} (Pack ${pack})` : model;
 };
 
+const truncateSubjectPart = (value, max = 42) => {
+  const text = String(value ?? '').trim().replace(/\s+/g, ' ');
+  if (!text) return '';
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
+};
+
+/** Short labels for subject lines (keeps subjects readable in inbox). */
+const CHANGE_TYPE_SHORT = {
+  categoryTeamCost: 'CTC',
+  sourcePrice: 'Source price',
+  warehouse: 'Warehouse',
+  transport: 'Transport',
+  label: 'Label',
+  labour: 'Labour',
+  poly: 'Poly',
+  pouch: 'Pouch',
+  box: 'Box',
+  masterCartoon: 'Master cartoon',
+  manualsPamphlets: 'Manuals',
+  otherCost: 'Other cost',
+};
+
+const summarizeChangeTypes = (changes = []) => {
+  const labels = [];
+  const seen = new Set();
+  for (const c of changes) {
+    const short =
+      CHANGE_TYPE_SHORT[c.key] ||
+      truncateSubjectPart(c.label || c.key, 18);
+    const key = short.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    labels.push(short);
+  }
+  if (labels.length === 0) return 'Update';
+  if (labels.length <= 3) return labels.join(', ');
+  return `${labels.slice(0, 2).join(', ')} +${labels.length - 2} more`;
+};
+
+/**
+ * Subject for a single save — unique per product + ASIN + fields + time
+ * so Gmail does not merge separate notifications into one thread.
+ */
+const buildSingleEmailSubject = (item, timestamp) => {
+  const name = truncateSubjectPart(formatItemLabel(item), 38);
+  const asin = truncateSubjectPart(item.asin, 14);
+  const changeTypes = summarizeChangeTypes(item.changes);
+  const hasCtc = item.changes.some((c) => c.key === 'categoryTeamCost');
+  const changeKind = hasCtc ? 'CTC update' : 'Product update';
+  const ts =
+    truncateSubjectPart(timestamp, 28) ||
+    new Date().toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+  return `[SourcePrice] ${changeKind}: ${name} · ${asin} · ${changeTypes} · ${ts}`;
+};
+
+/**
+ * Subject for bulk / multi-product save — one email, one thread is intended.
+ */
+const buildBulkEmailSubject = (items, timestamp) => {
+  const totalChanges = items.reduce((n, i) => n + i.changes.length, 0);
+  const hasCtc = items.some((i) =>
+    i.changes.some((c) => c.key === 'categoryTeamCost'),
+  );
+  const batchKind = hasCtc ? 'Bulk update (CTC)' : 'Bulk update';
+  const ts =
+    truncateSubjectPart(timestamp, 28) ||
+    new Date().toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+  return `[SourcePrice] ${batchKind} — ${items.length} products, ${totalChanges} field${totalChanges === 1 ? '' : 's'} · ${ts}`;
+};
+
+const buildEmailSubject = (items, timestamp) => {
+  if (items.length === 1) {
+    return buildSingleEmailSubject(items[0], timestamp);
+  }
+  return buildBulkEmailSubject(items, timestamp);
+};
+
+const buildUniqueMessageId = () => {
+  const domain =
+    stripEnv(process.env.SMTP_USER).split('@')[1] || 'sourceprice.local';
+  return `<sourceprice-${randomUUID()}@${domain}>`;
+};
+
+/** Normalize batch item — supports legacy CTC-only { oldValue, newValue } or { changes: [] }. */
+const normalizeBatchItem = (item) => {
+  if (!item) return null;
+
+  if (Array.isArray(item.changes) && item.changes.length > 0) {
+    const isValid = (v) =>
+      Number.isFinite(Number(v)) || String(v ?? '').trim() !== '';
+    const changes = item.changes.filter(
+      (c) => c && isValid(c.oldValue) && isValid(c.newValue),
+    );
+    if (!changes.length) return null;
+    return { ...item, changes };
+  }
+
+  if (
+    Number.isFinite(Number(item.oldValue)) &&
+    Number.isFinite(Number(item.newValue))
+  ) {
+    return {
+      ...item,
+      changes: [
+        {
+          key: 'categoryTeamCost',
+          label: 'CATAGORY TEAM COST',
+          oldValue: item.oldValue,
+          newValue: item.newValue,
+        },
+      ],
+    };
+  }
+
+  return null;
+};
+
 const getTransporter = () => {
-  const host = String(process.env.SMTP_HOST || '').trim();
-  const user = String(process.env.SMTP_USER || '').trim();
-  const pass = String(process.env.SMTP_PASS || '').trim();
+  const host = stripEnv(process.env.SMTP_HOST);
+  const user = stripEnv(process.env.SMTP_USER);
+  const pass = stripEnv(process.env.SMTP_PASS);
 
   if (!host || !user || !pass) {
     return null;
@@ -126,11 +291,20 @@ const getTransporter = () => {
   });
 };
 
+const getMailFrom = () => {
+  const smtpUser = stripEnv(process.env.SMTP_USER);
+  const displayFrom = stripEnv(process.env.EMAIL_FROM);
+  return {
+    from: `"SourcePrice" <${smtpUser}>`,
+    replyTo: displayFrom && displayFrom.includes('@') ? displayFrom : smtpUser,
+  };
+};
+
 /** Log-friendly status for server startup (never logs the password). */
 export const getEmailConfigStatus = () => {
-  const host = String(process.env.SMTP_HOST || '').trim();
-  const user = String(process.env.SMTP_USER || '').trim();
-  const pass = String(process.env.SMTP_PASS || '').trim();
+  const host = stripEnv(process.env.SMTP_HOST);
+  const user = stripEnv(process.env.SMTP_USER);
+  const pass = stripEnv(process.env.SMTP_PASS);
   const enabled = process.env.EMAIL_ENABLED !== 'false';
 
   if (!enabled) {
@@ -148,7 +322,7 @@ export const getEmailConfigStatus = () => {
     host,
     user,
     routing:
-      'CTC only · batch on multi-edit · Akshit+Anirudh+Mukul always · brand routing',
+      'All field changes on save · batch on multi-edit · brand routing · CC editor',
   };
 };
 
@@ -166,21 +340,41 @@ export const verifyEmailConnection = async () => {
 };
 
 const buildBatchEmailHtml = ({ items, updatedBy, timestamp, greeting }) => {
-  const rows = items
-    .map(
-      (item) => `
+  const productBlocks = items
+    .map((item) => {
+      const rows = item.changes
+        .map(
+          (c) => `
         <tr>
-          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#334155;">
-            ${escapeHtml(formatItemLabel(item))}
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#64748b;">
+            ${escapeHtml(c.label || c.key || 'Field')}
           </td>
-          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:14px;font-weight:700;color:#4338ca;font-variant-numeric:tabular-nums;">
-            ${escapeHtml(formatMoney(item.oldValue))}
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:13px;font-weight:600;color:#334155;font-variant-numeric:tabular-nums;">
+            ${escapeHtml(formatFieldValue(c.oldValue, c.label || c.key))}
             <span style="color:#94a3b8;font-weight:500;"> → </span>
-            ${escapeHtml(formatMoney(item.newValue))}
+            ${escapeHtml(formatFieldValue(c.newValue, c.label || c.key))}
           </td>
         </tr>`,
-    )
+        )
+        .join('');
+
+      return `
+        <div style="margin-bottom:20px;">
+          <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#0f172a;">
+            ${escapeHtml(formatItemLabel(item))}
+          </p>
+          <p style="margin:0 0 8px;font-size:11px;color:#94a3b8;">ASIN ${escapeHtml(item.asin)}</p>
+          <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    })
     .join('');
+
+  const totalChanges = items.reduce((n, i) => n + i.changes.length, 0);
+  const hasCtc = items.some((i) =>
+    i.changes.some((c) => c.key === 'categoryTeamCost'),
+  );
 
   return `
 <!DOCTYPE html>
@@ -192,7 +386,7 @@ const buildBatchEmailHtml = ({ items, updatedBy, timestamp, greeting }) => {
           SourcePrice Alert
         </div>
         <h1 style="margin:8px 0 0;font-size:22px;line-height:1.3;">
-          Category Team Cost Updated
+          ${hasCtc ? 'Product Costs Updated' : 'Product Costs Updated'}
         </h1>
       </div>
 
@@ -201,21 +395,11 @@ const buildBatchEmailHtml = ({ items, updatedBy, timestamp, greeting }) => {
           Hi ${escapeHtml(greeting)},
         </p>
         <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
-          <strong>CATAGORY TEAM COST</strong> was updated for
-          ${items.length === 1 ? 'this product' : `${items.length} products`}.
+          <strong>${totalChanges}</strong> field change${totalChanges === 1 ? '' : 's'} across
+          <strong>${items.length}</strong> product${items.length === 1 ? '' : 's'}.
         </p>
 
-        <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
-          <thead>
-            <tr style="background:#f1f5f9;">
-              <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;">Product</th>
-              <th style="padding:8px 12px;text-align:right;font-size:11px;color:#64748b;">CATAGORY TEAM COST</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
+        ${productBlocks}
 
         <p style="margin:16px 0 0;font-size:12px;color:#64748b;">
           Updated by ${escapeHtml(updatedBy)} · ${escapeHtml(timestamp)}
@@ -230,23 +414,30 @@ const buildBatchEmailText = ({ items, updatedBy, timestamp, greeting }) => {
   const lines = [
     `Hi ${greeting},`,
     '',
-    'CATAGORY TEAM COST updates:',
+    'Product updates:',
     '',
-    ...items.map(
-      (item) =>
-        `- ${formatItemLabel(item)}: ${formatMoney(item.oldValue)} -> ${formatMoney(item.newValue)}`,
-    ),
-    '',
-    `Updated by: ${updatedBy}`,
-    `Time: ${timestamp}`,
   ];
+
+  for (const item of items) {
+    lines.push(formatItemLabel(item));
+    lines.push(`ASIN: ${item.asin}`);
+    for (const c of item.changes) {
+      lines.push(
+        `  - ${c.label || c.key}: ${formatFieldValue(c.oldValue, c.label)} -> ${formatFieldValue(c.newValue, c.label)}`,
+      );
+    }
+    lines.push('');
+  }
+
+  lines.push(`Updated by: ${updatedBy}`);
+  lines.push(`Time: ${timestamp}`);
   return lines.join('\n');
 };
 
 /**
- * Send one email with only Category Team Cost changes (single or batch).
+ * Send one email listing all field changes (single or batch).
  */
-export const notifyCategoryTeamCostBatch = async ({
+export const notifyProductChangesBatch = async ({
   items = [],
   updatedBy = 'unknown',
   timestamp = '',
@@ -255,18 +446,13 @@ export const notifyCategoryTeamCostBatch = async ({
     return { ok: false, skipped: true, reason: 'disabled' };
   }
 
-  const clean = items.filter(
-    (item) =>
-      item &&
-      Number.isFinite(Number(item.oldValue)) &&
-      Number.isFinite(Number(item.newValue)),
-  );
+  const clean = items.map(normalizeBatchItem).filter(Boolean);
 
   if (!clean.length) {
     return { ok: false, skipped: true, reason: 'no_items' };
   }
 
-  const { emails, greeting } = getRecipientsForBatch(clean);
+  const { emails, greeting } = getRecipientsForBatch(clean, updatedBy);
   if (!emails.length) {
     return { ok: false, skipped: true, reason: 'no_recipients' };
   }
@@ -274,61 +460,77 @@ export const notifyCategoryTeamCostBatch = async ({
   const transporter = getTransporter();
   if (!transporter) {
     console.warn(
-      '[email] SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASS in .env to send alerts.',
+      '[email] SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASS in .env',
     );
     return { ok: false, skipped: true, reason: 'smtp_not_configured' };
   }
 
-  const from =
-    process.env.EMAIL_FROM || process.env.SMTP_USER || 'sourceprice@avaipl.com';
-  const countLabel = clean.length === 1 ? '1 product' : `${clean.length} products`;
-  const subject = `[SourcePrice] Category Team Cost updated — ${countLabel}`;
+  const subject = buildEmailSubject(clean, timestamp);
+  const isBulk = clean.length > 1;
 
+  const { from, replyTo } = getMailFrom();
   const payload = { items: clean, updatedBy, timestamp, greeting };
 
   try {
     await transporter.sendMail({
       from,
+      replyTo,
       to: emails.join(', '),
       subject,
+      messageId: buildUniqueMessageId(),
+      headers: {
+        'X-SourcePrice-Notification': isBulk ? 'bulk' : 'single',
+        'X-SourcePrice-Product-Count': String(clean.length),
+      },
       text: buildBatchEmailText(payload),
       html: buildBatchEmailHtml(payload),
     });
 
+    const totalChanges = clean.reduce((n, i) => n + i.changes.length, 0);
     console.log(
-      `[email] Category Team Cost alert sent to ${emails.join(', ')} (${clean.length} product${clean.length === 1 ? '' : 's'})`,
+      `[email] Alert sent (${isBulk ? 'bulk' : 'single'}) subject="${subject}" → ${emails.join(', ')} (${clean.length} product${clean.length === 1 ? '' : 's'}, ${totalChanges} change${totalChanges === 1 ? '' : 's'})`,
     );
-    return { ok: true, to: emails, count: clean.length };
+    return {
+      ok: true,
+      to: emails,
+      count: clean.length,
+      fieldChanges: totalChanges,
+      subject,
+    };
   } catch (err) {
-    console.error('[email] Failed to send Category Team Cost alert:', err);
+    console.error('[email] Failed to send alert:', err);
     return { ok: false, error: err.message || 'Email send failed.' };
   }
 };
 
-/** Single-product save — delegates to batch helper. */
-export const notifyCategoryTeamCostChange = async ({
+/** @deprecated alias — use notifyProductChangesBatch */
+export const notifyCategoryTeamCostBatch = notifyProductChangesBatch;
+
+/** Single-product save — any changed fields. */
+export const notifyProductChanges = async ({
   product,
   changes = [],
   updatedBy,
   timestamp,
 }) => {
-  const ctc = changes.find((c) => c.key === 'categoryTeamCost');
-  if (!ctc) {
-    return { ok: false, skipped: true, reason: 'category_team_cost_unchanged' };
+  if (!changes.length) {
+    return { ok: false, skipped: true, reason: 'no_changes' };
   }
 
-  return notifyCategoryTeamCostBatch({
+  return notifyProductChangesBatch({
     items: [
       {
         asin: product?.asin,
         brand: product?.brand,
         modelNo: product?.modelNo,
         packSize: product?.packSize,
-        oldValue: ctc.oldValue,
-        newValue: ctc.newValue,
+        changes,
       },
     ],
     updatedBy,
     timestamp,
   });
 };
+
+/** @deprecated alias */
+export const notifyCategoryTeamCostChange = notifyProductChanges;

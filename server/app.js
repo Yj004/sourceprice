@@ -8,7 +8,12 @@ import {
   updateProduct,
   updateProductPrice,
 } from './sheetsClient.js';
-import { notifyCategoryTeamCostBatch, notifyCategoryTeamCostChange } from './emailService.js';
+import {
+  getEmailConfigStatus,
+  notifyProductChanges,
+  notifyProductChangesBatch,
+  verifyEmailConnection,
+} from './emailService.js';
 import {
   createUser,
   deleteUser,
@@ -39,7 +44,15 @@ export const createApp = () => {
   app.get('/api/health', async (_req, res) => {
     try {
       await ensureUsersReady();
-      res.json({ ok: true, sheet: Boolean(process.env.GOOGLE_SHEET_ID) });
+      const email = getEmailConfigStatus();
+      let smtp = { configured: email.ready };
+      if (email.ready) {
+        const verified = await verifyEmailConnection();
+        smtp = { ...smtp, verified: verified.ok, error: verified.error };
+      } else {
+        smtp = { ...smtp, reason: email.reason };
+      }
+      res.json({ ok: true, sheet: Boolean(process.env.GOOGLE_SHEET_ID), email: smtp });
     } catch (e) {
       res.status(500).json({ ok: false, error: e.message });
     }
@@ -159,7 +172,24 @@ export const createApp = () => {
         res.status(400).json(result);
         return;
       }
-      res.json(result);
+
+      let emailResult = { ok: false, skipped: true, reason: 'no_changes' };
+      const changes = result.changes || [];
+      if (changes.length) {
+        try {
+          emailResult = await notifyProductChanges({
+            product: result.product,
+            changes: changes.map((c) => ({ ...c })),
+            updatedBy: result.updatedBy,
+            timestamp: result.timestamp,
+          });
+        } catch (err) {
+          emailResult = { ok: false, error: err.message || 'Email failed' };
+          console.error('[email] Price update notification failed:', err);
+        }
+      }
+
+      res.json({ ...result, email: emailResult });
     } catch (e) {
       console.error('PATCH /api/products/:asin/price', e);
       res.status(500).json({ ok: false, error: e.message || 'Update failed.' });
@@ -184,21 +214,26 @@ export const createApp = () => {
         return;
       }
 
-      const ctcChanged = (result.changes || []).some(
-        (c) => c.key === 'categoryTeamCost',
-      );
-      if (ctcChanged && !suppressEmail) {
-        notifyCategoryTeamCostChange({
-          product: result.product,
-          changes: result.changes.map((c) => ({ ...c })),
-          updatedBy: result.updatedBy,
-          timestamp: result.timestamp,
-        }).catch((err) => {
-          console.error('Category Team Cost email notification failed:', err);
-        });
+      let emailResult = { ok: false, skipped: true, reason: 'no_changes' };
+      const changes = result.changes || [];
+      if (changes.length && !suppressEmail) {
+        try {
+          emailResult = await notifyProductChanges({
+            product: result.product,
+            changes: changes.map((c) => ({ ...c })),
+            updatedBy: result.updatedBy,
+            timestamp: result.timestamp,
+          });
+          if (!emailResult.ok && !emailResult.skipped) {
+            console.error('[email] Save notification failed:', emailResult.error);
+          }
+        } catch (err) {
+          emailResult = { ok: false, error: err.message || 'Email failed' };
+          console.error('[email] Save notification failed:', err);
+        }
       }
 
-      res.json(result);
+      res.json({ ...result, email: emailResult });
     } catch (e) {
       console.error('PATCH /api/products/:asin', e);
       res.status(500).json({ ok: false, error: e.message || 'Update failed.' });
@@ -213,7 +248,7 @@ export const createApp = () => {
         return;
       }
 
-      const result = await notifyCategoryTeamCostBatch({
+      const result = await notifyProductChangesBatch({
         items,
         updatedBy: updatedBy || req.user.email,
         timestamp: timestamp || new Date().toLocaleString('en-IN'),
