@@ -5,7 +5,7 @@ import 'dotenv/config';
 import {
   getEmailConfigStatus,
   getRecipientsForBrand,
-  notifyProductChanges,
+  sendCtcAlertIfNeeded,
   verifyEmailConnection,
 } from '../emailService.js';
 
@@ -29,12 +29,11 @@ console.log(`\nBrand "${testBrand}" → ${recipients.emails.join(', ')}\n`);
 
 console.log('SMTP connection OK. Sending test alert...\n');
 
-const result = await notifyProductChanges({
+const result = await sendCtcAlertIfNeeded({
   product: {
     asin: 'B0TEST12345',
     brand: testBrand,
     modelNo: 'RB-TEST-MODEL',
-    plc: 'ACMOUNT',
     packSize: '1',
   },
   changes: [
@@ -44,18 +43,9 @@ const result = await notifyProductChanges({
       oldValue: 0,
       newValue: 995,
     },
-    {
-      key: 'warehouse',
-      label: 'Warehouse',
-      oldValue: 0,
-      newValue: 50,
-    },
   ],
   updatedBy: 'test@avaipl.com',
   timestamp: new Date().toLocaleString('en-IN'),
-  totalChanged: true,
-  oldTotalCost: 995,
-  newTotalCost: 1045,
 });
 
 if (result.ok) {

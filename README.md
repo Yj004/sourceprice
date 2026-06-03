@@ -34,7 +34,12 @@ npm run dev:web      # frontend only
 npm run dev:server   # API only
 npm run build
 npm run lint
+npm run test:email   # Test SMTP + send sample CTC alert
 ```
+
+## Email alerts (CTC only)
+
+Gmail notifications fire **only** when **Category Team Cost** changes and the user saves. See **[docs/EMAIL.md](docs/EMAIL.md)** for triggers, recipients, bulk behavior, and troubleshooting.
 
 ## How it works
 

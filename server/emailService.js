@@ -140,84 +140,47 @@ const truncateSubjectPart = (value, max = 42) => {
   return `${text.slice(0, max - 1)}…`;
 };
 
-/** Short labels for subject lines (keeps subjects readable in inbox). */
-const CHANGE_TYPE_SHORT = {
-  categoryTeamCost: 'CTC',
-  sourcePrice: 'Source price',
-  warehouse: 'Warehouse',
-  transport: 'Transport',
-  label: 'Label',
-  labour: 'Labour',
-  poly: 'Poly',
-  pouch: 'Pouch',
-  box: 'Box',
-  masterCartoon: 'Master cartoon',
-  manualsPamphlets: 'Manuals',
-  otherCost: 'Other cost',
-};
+const CTC_KEY = 'categoryTeamCost';
 
-const summarizeChangeTypes = (changes = []) => {
-  const labels = [];
-  const seen = new Set();
-  for (const c of changes) {
-    const short =
-      CHANGE_TYPE_SHORT[c.key] ||
-      truncateSubjectPart(c.label || c.key, 18);
-    const key = short.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    labels.push(short);
-  }
-  if (labels.length === 0) return 'Update';
-  if (labels.length <= 3) return labels.join(', ');
-  return `${labels.slice(0, 2).join(', ')} +${labels.length - 2} more`;
-};
+export const hasCtcChange = (changes = []) =>
+  changes.some((c) => c?.key === CTC_KEY);
+
+const extractCtcChange = (changes = []) =>
+  changes.find((c) => c?.key === CTC_KEY) || null;
+
+const formatSubjectTimestamp = (timestamp) =>
+  truncateSubjectPart(timestamp, 28) ||
+  new Date().toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 
 /**
- * Subject for a single save — unique per product + ASIN + fields + time
+ * Subject for a single CTC save — unique per product + ASIN + time
  * so Gmail does not merge separate notifications into one thread.
  */
 const buildSingleEmailSubject = (item, timestamp) => {
   const name = truncateSubjectPart(formatItemLabel(item), 38);
   const asin = truncateSubjectPart(item.asin, 14);
-  const changeTypes = summarizeChangeTypes(item.changes);
-  const hasCtc = item.changes.some((c) => c.key === 'categoryTeamCost');
-  const changeKind = hasCtc ? 'CTC update' : 'Product update';
-  const ts =
-    truncateSubjectPart(timestamp, 28) ||
-    new Date().toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
+  const ctc = item.changes.find((c) => c.key === CTC_KEY);
+  const delta = ctc
+    ? `${formatMoney(ctc.oldValue)} → ${formatMoney(ctc.newValue)}`
+    : 'CTC changed';
+  const ts = formatSubjectTimestamp(timestamp);
 
-  return `[SourcePrice] ${changeKind}: ${name} · ${asin} · ${changeTypes} · ${ts}`;
+  return `[SourcePrice] CTC update: ${name} · ${asin} · ${delta} · ${ts}`;
 };
 
 /**
- * Subject for bulk / multi-product save — one email, one thread is intended.
+ * Subject for bulk CTC save — one email, one Gmail thread is intended.
  */
 const buildBulkEmailSubject = (items, timestamp) => {
-  const totalChanges = items.reduce((n, i) => n + i.changes.length, 0);
-  const hasCtc = items.some((i) =>
-    i.changes.some((c) => c.key === 'categoryTeamCost'),
-  );
-  const batchKind = hasCtc ? 'Bulk update (CTC)' : 'Bulk update';
-  const ts =
-    truncateSubjectPart(timestamp, 28) ||
-    new Date().toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-
-  return `[SourcePrice] ${batchKind} — ${items.length} products, ${totalChanges} field${totalChanges === 1 ? '' : 's'} · ${ts}`;
+  const ts = formatSubjectTimestamp(timestamp);
+  return `[SourcePrice] Bulk CTC update — ${items.length} product${items.length === 1 ? '' : 's'} · ${ts}`;
 };
 
 const buildEmailSubject = (items, timestamp) => {
@@ -322,7 +285,7 @@ export const getEmailConfigStatus = () => {
     host,
     user,
     routing:
-      'All field changes on save · batch on multi-edit · brand routing · CC editor',
+      'CTC changes only on save · single trigger · batch on multi-edit · CC editor',
   };
 };
 
@@ -340,41 +303,22 @@ export const verifyEmailConnection = async () => {
 };
 
 const buildBatchEmailHtml = ({ items, updatedBy, timestamp, greeting }) => {
-  const productBlocks = items
+  const rows = items
     .map((item) => {
-      const rows = item.changes
-        .map(
-          (c) => `
-        <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#64748b;">
-            ${escapeHtml(c.label || c.key || 'Field')}
-          </td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:13px;font-weight:600;color:#334155;font-variant-numeric:tabular-nums;">
-            ${escapeHtml(formatFieldValue(c.oldValue, c.label || c.key))}
-            <span style="color:#94a3b8;font-weight:500;"> → </span>
-            ${escapeHtml(formatFieldValue(c.newValue, c.label || c.key))}
-          </td>
-        </tr>`,
-        )
-        .join('');
-
+      const ctc = item.changes.find((c) => c.key === CTC_KEY);
       return `
-        <div style="margin-bottom:20px;">
-          <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#0f172a;">
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#334155;">
             ${escapeHtml(formatItemLabel(item))}
-          </p>
-          <p style="margin:0 0 8px;font-size:11px;color:#94a3b8;">ASIN ${escapeHtml(item.asin)}</p>
-          <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
-            <tbody>${rows}</tbody>
-          </table>
-        </div>`;
+          </td>
+          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:14px;font-weight:700;color:#4338ca;font-variant-numeric:tabular-nums;">
+            ${escapeHtml(formatMoney(ctc?.oldValue))}
+            <span style="color:#94a3b8;font-weight:500;"> → </span>
+            ${escapeHtml(formatMoney(ctc?.newValue))}
+          </td>
+        </tr>`;
     })
     .join('');
-
-  const totalChanges = items.reduce((n, i) => n + i.changes.length, 0);
-  const hasCtc = items.some((i) =>
-    i.changes.some((c) => c.key === 'categoryTeamCost'),
-  );
 
   return `
 <!DOCTYPE html>
@@ -386,7 +330,7 @@ const buildBatchEmailHtml = ({ items, updatedBy, timestamp, greeting }) => {
           SourcePrice Alert
         </div>
         <h1 style="margin:8px 0 0;font-size:22px;line-height:1.3;">
-          ${hasCtc ? 'Product Costs Updated' : 'Product Costs Updated'}
+          Category Team Cost Updated
         </h1>
       </div>
 
@@ -395,11 +339,21 @@ const buildBatchEmailHtml = ({ items, updatedBy, timestamp, greeting }) => {
           Hi ${escapeHtml(greeting)},
         </p>
         <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
-          <strong>${totalChanges}</strong> field change${totalChanges === 1 ? '' : 's'} across
-          <strong>${items.length}</strong> product${items.length === 1 ? '' : 's'}.
+          <strong>CATAGORY TEAM COST</strong> was updated for
+          ${items.length === 1 ? 'this product' : `${items.length} products`}.
         </p>
 
-        ${productBlocks}
+        <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+          <thead>
+            <tr style="background:#f1f5f9;">
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;">Product</th>
+              <th style="padding:8px 12px;text-align:right;font-size:11px;color:#64748b;">CATAGORY TEAM COST</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
 
         <p style="margin:16px 0 0;font-size:12px;color:#64748b;">
           Updated by ${escapeHtml(updatedBy)} · ${escapeHtml(timestamp)}
@@ -414,30 +368,46 @@ const buildBatchEmailText = ({ items, updatedBy, timestamp, greeting }) => {
   const lines = [
     `Hi ${greeting},`,
     '',
-    'Product updates:',
+    'CATAGORY TEAM COST updates:',
     '',
+    ...items.map((item) => {
+      const ctc = item.changes.find((c) => c.key === CTC_KEY);
+      return `- ${formatItemLabel(item)}: ${formatMoney(ctc?.oldValue)} -> ${formatMoney(ctc?.newValue)}`;
+    }),
+    '',
+    `Updated by: ${updatedBy}`,
+    `Time: ${timestamp}`,
   ];
-
-  for (const item of items) {
-    lines.push(formatItemLabel(item));
-    lines.push(`ASIN: ${item.asin}`);
-    for (const c of item.changes) {
-      lines.push(
-        `  - ${c.label || c.key}: ${formatFieldValue(c.oldValue, c.label)} -> ${formatFieldValue(c.newValue, c.label)}`,
-      );
-    }
-    lines.push('');
-  }
-
-  lines.push(`Updated by: ${updatedBy}`);
-  lines.push(`Time: ${timestamp}`);
   return lines.join('\n');
 };
 
+/** Keep only Category Team Cost on each batch item. */
+const toCtcOnlyItem = (item) => {
+  const normalized = normalizeBatchItem(item);
+  if (!normalized) return null;
+  const ctcChanges = normalized.changes.filter((c) => c.key === CTC_KEY);
+  if (!ctcChanges.length) return null;
+  return { ...normalized, changes: ctcChanges };
+};
+
+const buildCtcItemsFromSave = ({ product, changes }) => {
+  const ctc = extractCtcChange(changes);
+  if (!ctc || !product) return [];
+  return [
+    {
+      asin: product.asin,
+      brand: product.brand,
+      modelNo: product.modelNo,
+      packSize: product.packSize,
+      changes: [ctc],
+    },
+  ];
+};
+
 /**
- * Send one email listing all field changes (single or batch).
+ * Internal send — items must already be CTC-only (use sendCtcAlertIfNeeded).
  */
-export const notifyProductChangesBatch = async ({
+const sendCtcEmail = async ({
   items = [],
   updatedBy = 'unknown',
   timestamp = '',
@@ -503,34 +473,56 @@ export const notifyProductChangesBatch = async ({
   }
 };
 
-/** @deprecated alias — use notifyProductChangesBatch */
-export const notifyCategoryTeamCostBatch = notifyProductChangesBatch;
-
-/** Single-product save — any changed fields. */
-export const notifyProductChanges = async ({
+/**
+ * Single trigger point for all CTC email alerts.
+ *
+ * Call after a successful save. Sends email only when Category Team Cost
+ * actually changed. Use suppressEmail during bulk edit steps; flush once
+ * at the end with items[].
+ */
+export const sendCtcAlertIfNeeded = async ({
   product,
   changes = [],
-  updatedBy,
-  timestamp,
+  items = null,
+  updatedBy = 'unknown',
+  timestamp = '',
+  suppressEmail = false,
 }) => {
-  if (!changes.length) {
-    return { ok: false, skipped: true, reason: 'no_changes' };
+  if (suppressEmail) {
+    return { ok: false, skipped: true, reason: 'suppressed' };
   }
 
-  return notifyProductChangesBatch({
-    items: [
-      {
-        asin: product?.asin,
-        brand: product?.brand,
-        modelNo: product?.modelNo,
-        packSize: product?.packSize,
-        changes,
-      },
-    ],
+  const rawItems = Array.isArray(items) && items.length > 0
+    ? items
+    : buildCtcItemsFromSave({ product, changes });
+
+  const clean = rawItems.map(toCtcOnlyItem).filter(Boolean);
+
+  if (!clean.length) {
+    return { ok: false, skipped: true, reason: 'category_team_cost_unchanged' };
+  }
+
+  return sendCtcEmail({
+    items: clean,
     updatedBy,
-    timestamp,
+    timestamp: timestamp || new Date().toLocaleString('en-IN'),
   });
 };
 
-/** @deprecated alias */
-export const notifyCategoryTeamCostChange = notifyProductChanges;
+/** Batch endpoint + client bulk flush — CTC items only. */
+export const notifyCategoryTeamCostBatch = async (payload) =>
+  sendCtcAlertIfNeeded({
+    items: payload?.items,
+    updatedBy: payload?.updatedBy,
+    timestamp: payload?.timestamp,
+  });
+
+/** @deprecated — use sendCtcAlertIfNeeded */
+export const notifyProductChanges = (args) => sendCtcAlertIfNeeded(args);
+export const notifyCategoryTeamCostChange = (args) => sendCtcAlertIfNeeded(args);
+export const notifyProductChangesBatch = (payload) =>
+  sendCtcAlertIfNeeded({
+    items: payload?.items,
+    updatedBy: payload?.updatedBy,
+    timestamp: payload?.timestamp,
+  });

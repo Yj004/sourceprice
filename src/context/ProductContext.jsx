@@ -210,11 +210,11 @@ export const ProductProvider = ({ children }) => {
 
         const email = result.email;
         if (email?.ok) {
-          showToast('Email alert sent to the team', 'success');
+          showToast('CTC email alert sent to the team', 'success');
         } else if (email && !email.skipped && email.error) {
-          showToast(`Saved, but email failed: ${email.error}`, 'error');
+          showToast(`Saved, but CTC email failed: ${email.error}`, 'error');
         } else if (email?.skipped && email.reason === 'smtp_not_configured') {
-          showToast('Saved — SMTP not configured (no email sent)', 'error');
+          showToast('Saved — SMTP not configured (no CTC email)', 'error');
         }
 
         return {

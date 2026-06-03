@@ -10,8 +10,7 @@ import {
 } from './sheetsClient.js';
 import {
   getEmailConfigStatus,
-  notifyProductChanges,
-  notifyProductChangesBatch,
+  sendCtcAlertIfNeeded,
   verifyEmailConnection,
 } from './emailService.js';
 import {
@@ -173,23 +172,10 @@ export const createApp = () => {
         return;
       }
 
-      let emailResult = { ok: false, skipped: true, reason: 'no_changes' };
-      const changes = result.changes || [];
-      if (changes.length) {
-        try {
-          emailResult = await notifyProductChanges({
-            product: result.product,
-            changes: changes.map((c) => ({ ...c })),
-            updatedBy: result.updatedBy,
-            timestamp: result.timestamp,
-          });
-        } catch (err) {
-          emailResult = { ok: false, error: err.message || 'Email failed' };
-          console.error('[email] Price update notification failed:', err);
-        }
-      }
-
-      res.json({ ...result, email: emailResult });
+      res.json({
+        ...result,
+        email: { ok: false, skipped: true, reason: 'category_team_cost_unchanged' },
+      });
     } catch (e) {
       console.error('PATCH /api/products/:asin/price', e);
       res.status(500).json({ ok: false, error: e.message || 'Update failed.' });
@@ -214,23 +200,21 @@ export const createApp = () => {
         return;
       }
 
-      let emailResult = { ok: false, skipped: true, reason: 'no_changes' };
-      const changes = result.changes || [];
-      if (changes.length && !suppressEmail) {
-        try {
-          emailResult = await notifyProductChanges({
-            product: result.product,
-            changes: changes.map((c) => ({ ...c })),
-            updatedBy: result.updatedBy,
-            timestamp: result.timestamp,
-          });
-          if (!emailResult.ok && !emailResult.skipped) {
-            console.error('[email] Save notification failed:', emailResult.error);
-          }
-        } catch (err) {
-          emailResult = { ok: false, error: err.message || 'Email failed' };
-          console.error('[email] Save notification failed:', err);
+      let emailResult = { ok: false, skipped: true, reason: 'category_team_cost_unchanged' };
+      try {
+        emailResult = await sendCtcAlertIfNeeded({
+          product: result.product,
+          changes: (result.changes || []).map((c) => ({ ...c })),
+          updatedBy: result.updatedBy,
+          timestamp: result.timestamp,
+          suppressEmail: Boolean(suppressEmail),
+        });
+        if (!emailResult.ok && !emailResult.skipped) {
+          console.error('[email] CTC alert failed:', emailResult.error);
         }
+      } catch (err) {
+        emailResult = { ok: false, error: err.message || 'Email failed' };
+        console.error('[email] CTC alert failed:', err);
       }
 
       res.json({ ...result, email: emailResult });
@@ -248,7 +232,7 @@ export const createApp = () => {
         return;
       }
 
-      const result = await notifyProductChangesBatch({
+      const result = await sendCtcAlertIfNeeded({
         items,
         updatedBy: updatedBy || req.user.email,
         timestamp: timestamp || new Date().toLocaleString('en-IN'),

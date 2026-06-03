@@ -58,7 +58,7 @@ const DashboardPage = () => {
   const [editQueue, setEditQueue] = useState([]);
   const [selectedAsins, setSelectedAsins] = useState(() => new Set());
   const [showMyUpdates, setShowMyUpdates] = useState(false);
-  const bulkEmailPendingRef = useRef([]);
+  const bulkCtcPendingRef = useRef([]);
   const [statsTime, setStatsTime] = useState(() => Date.now());
 
   const filters = useMemo(
@@ -262,9 +262,9 @@ const DashboardPage = () => {
     [visibleProducts],
   );
 
-  const flushBulkEmail = useCallback(async () => {
-    const items = bulkEmailPendingRef.current;
-    bulkEmailPendingRef.current = [];
+  const flushBulkCtcEmail = useCallback(async () => {
+    const items = bulkCtcPendingRef.current;
+    bulkCtcPendingRef.current = [];
     if (!items.length) return;
 
     try {
@@ -275,30 +275,31 @@ const DashboardPage = () => {
       });
       if (emailResult?.ok) return emailResult;
       if (emailResult && !emailResult.skipped) {
-        console.error('Bulk email failed:', emailResult.error || emailResult);
+        console.error('Bulk CTC email failed:', emailResult.error || emailResult);
       }
       return emailResult;
     } catch (err) {
-      console.error('Bulk product update email failed:', err);
+      console.error('Bulk CTC email failed:', err);
       return { ok: false, error: err.message };
     }
   }, [user?.email]);
 
-  const collectBulkEmailChange = useCallback((result, product) => {
-    const changes = result.changes || [];
-    if (!changes.length) return;
+  const collectBulkCtcChange = useCallback((result, product) => {
+    const ctc = (result.changes || []).find((c) => c.key === 'categoryTeamCost');
+    if (!ctc) return;
 
-    bulkEmailPendingRef.current.push({
+    bulkCtcPendingRef.current.push({
       asin: result.product?.asin || product.asin,
       brand: result.product?.brand || product.brand,
       modelNo: result.product?.modelNo || product.modelNo,
       packSize: result.product?.packSize || product.packSize,
-      changes,
+      oldValue: ctc.oldValue,
+      newValue: ctc.newValue,
     });
   }, []);
 
   const handleSingleEdit = useCallback((product) => {
-    bulkEmailPendingRef.current = [];
+    bulkCtcPendingRef.current = [];
     setEditQueue([]);
     setEditingAsin(product.asin);
   }, []);
@@ -316,7 +317,7 @@ const DashboardPage = () => {
       const queue = buildSelectionQueue(orderSource);
       if (queue.length === 0) return;
 
-      bulkEmailPendingRef.current = [];
+      bulkCtcPendingRef.current = [];
 
       if (queue.length === 1) {
         setEditQueue([]);
@@ -365,23 +366,23 @@ const DashboardPage = () => {
       setEditingAsin(nextAsin);
       return;
     }
-    void flushBulkEmail();
+    void flushBulkCtcEmail();
     setEditingAsin(null);
     setEditQueue([]);
-  }, [editQueue, editingAsin, flushBulkEmail]);
+  }, [editQueue, editingAsin, flushBulkCtcEmail]);
 
   const handleCloseEdit = useCallback(() => {
-    void flushBulkEmail();
+    void flushBulkCtcEmail();
     setEditingAsin(null);
     setEditQueue([]);
-  }, [flushBulkEmail]);
+  }, [flushBulkCtcEmail]);
 
   const handleClearSelection = useCallback(() => {
-    void flushBulkEmail();
+    void flushBulkCtcEmail();
     setEditingAsin(null);
     setEditQueue([]);
     setSelectedAsins(new Set());
-  }, [flushBulkEmail]);
+  }, [flushBulkCtcEmail]);
 
   const handleEditSave = useCallback(
     async (updates) => {
@@ -396,7 +397,7 @@ const DashboardPage = () => {
       if (!result?.ok) return result;
 
       if (inBulk) {
-        collectBulkEmailChange(result, editingProduct);
+        collectBulkCtcChange(result, editingProduct);
         const idx = editQueue.indexOf(editingAsin);
         const nextAsin = idx >= 0 ? editQueue[idx + 1] : null;
         if (nextAsin) {
@@ -405,7 +406,7 @@ const DashboardPage = () => {
         }
         setEditQueue([]);
         setEditingAsin(null);
-        const emailResult = await flushBulkEmail();
+        const emailResult = await flushBulkCtcEmail();
         return { ok: true, product: result.product, email: emailResult };
       }
 
@@ -417,8 +418,8 @@ const DashboardPage = () => {
       editingAsin,
       editingProduct,
       saveProductEdit,
-      collectBulkEmailChange,
-      flushBulkEmail,
+      collectBulkCtcChange,
+      flushBulkCtcEmail,
     ],
   );
 
